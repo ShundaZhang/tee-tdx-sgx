@@ -2,18 +2,18 @@
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-PAGES = ('index', 'architecture', 'attestation', 'labs')
+PAGES = ('index', 'sgx', 'tdx', 'labs')
 NAV = {
-    'en': ('Overview', 'Architecture', 'Attestation', 'Labs & sources'),
-    'zh': ('总览', '架构与边界', '远程证明', '实验与资料'),
+    'en': ('Overview', 'Intel SGX', 'Intel TDX', 'Labs & sources'),
+    'zh': ('总览', 'Intel SGX', 'Intel TDX', '实验与资料'),
 }
 TITLES = {
-    'en': ('TEE / TDX / SGX Atlas', 'Architecture & threat models', 'Attestation & key release', 'Labs & primary sources'),
-    'zh': ('TEE / TDX / SGX 地图', '架构与威胁模型', '远程证明与密钥释放', '实验与一手资料'),
+    'en': ('TEE / TDX / SGX Atlas', 'Intel SGX architecture & instructions', 'Intel TDX architecture & calls', 'Hardware labs & primary sources'),
+    'zh': ('TEE / TDX / SGX 地图', 'Intel SGX 原理与指令', 'Intel TDX 原理与调用', '硬件实验与一手资料'),
 }
 DESCRIPTIONS = {
-    'en': 'A security-first learning path through Intel SGX, Intel TDX, trust boundaries, remote attestation, and confidential computing.',
-    'zh': '从安全视角学习 Intel SGX、Intel TDX、信任边界、远程证明与机密计算。',
+    'en': 'A focused guide to Intel SGX and TDX architecture, hardware support, SGX instructions, TDCALL and SEAMCALL.',
+    'zh': '聚焦 Intel SGX 与 TDX 的架构、硬件支持、SGX 指令、TDCALL 和 SEAMCALL。',
 }
 
 
@@ -41,9 +41,9 @@ def shell(lang, page, body):
     en_current = '' if zh else 'aria-current="page" '
     zh_current = 'aria-current="page" ' if zh else ''
     languages = f'<nav class="langbar" aria-label="{lang_label}"><a data-atlas-lang="en" {en_current}href="{page}.html">EN</a><a data-atlas-lang="zh" {zh_current}href="{page}.zh.html">中文</a></nav>'
-    foot = ('面向安全工程师的学习地图。具体平台能力、补丁与证明策略请以厂商和系统文档为准。' if zh else 'A field guide for security engineers. Verify platform capabilities, updates, and attestation policy against vendor and OS documentation.')
+    foot = ('聚焦 SGX 与 TDX 的硬件和软件机制。功能支持及指令接口以具体处理器、模块和系统版本为准。' if zh else 'A focused SGX and TDX field guide. Check processor, module and OS versions for actual feature and ABI support.')
     return f'''<!doctype html>
-<html lang="{'zh-CN' if zh else 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101b2a"><meta name="description" content="{DESCRIPTIONS[lang]}"><title>{TITLES[lang][idx]} · ShundaZhang</title><link rel="stylesheet" href="style.css"><script src="language.js"></script><script defer src="app.js"></script></head>
+<html lang="{'zh-CN' if zh else 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101b2a"><meta name="description" content="{DESCRIPTIONS[lang]}"><title>{TITLES[lang][idx]} · ShundaZhang</title><link rel="stylesheet" href="style.css"><script src="language.js"></script></head>
 <body>{languages}<a class="skip" href="#main">{'跳至正文' if zh else 'Skip to content'}</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="index{suffix}"><span class="brand-mark">T//</span><span class="brand-name">TEE / TDX / SGX ATLAS</span></a><nav class="nav" aria-label="{'主导航' if zh else 'Main navigation'}">{nav}</nav></div></header>
 <main id="main">{body}</main><footer class="footer"><div class="wrap footer-inner"><div><strong>TEE / TDX / SGX ATLAS</strong><p>{foot}</p></div><div><a href="https://shundazhang.github.io/">{'个人主页' if zh else 'Home'}</a><a href="https://github.com/ShundaZhang/tee-tdx-sgx">GitHub ↗</a></div></div></footer></body></html>'''
 
@@ -53,208 +53,279 @@ def section(label, title, intro, content, tone='', section_id=''):
     return f'<section class="section {tone}"{ident}><div class="wrap"><div class="section-head"><div><span class="kicker">{label}</span><h2>{title}</h2></div><p>{intro}</p></div>{content}</div></section>'
 
 
-def index_en():
-    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">CONFIDENTIAL COMPUTING / SECURITY FIELD GUIDE</span><h1>Know the boundary<br><em>before trusting the box</em></h1><p>SGX protects an enclave inside a process. TDX protects a virtual machine from its host. Both need attestation, deliberate key release, and a threat model that includes untrusted I/O and side channels.</p><div class="buttons"><a class="button primary" href="#route">Follow the learning path ↗</a><a class="button ghost" href="attestation.html">Try the policy lab ↗</a></div><div class="hero-note">START WITH WHAT IS PROTECTED · THEN ASK WHAT REMAINS EXPOSED</div></div><div class="boundary-visual" role="img" aria-label="Untrusted host contains an SGX enclave and a TDX trust domain, each with a separate protected boundary and remote verifier"><div class="visual-head"><span>TRUST BOUNDARIES / 01</span><span>HOST ≠ TEE</span></div><div class="host-box"><span>UNTRUSTED HOST / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>PROCESS-LEVEL</small><b>SGX</b><p>Enclave code + data<br>inside an application</p></div><div class="protect-box"><small>VM-LEVEL</small><b>TDX</b><p>Private memory + state<br>of a guest VM</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>EVIDENCE → VERIFIER → POLICY</span><strong>KEY?</strong></div></div></div></section>'''
-    cards = '<div class="card-grid">' + ''.join([
-        card('01 / ISOLATION', 'SGX is an enclave', 'A process selects a small region of code and data. The kernel helps create it but cannot directly read enclave memory. The host app and enclave runtime remain security-relevant.', 'architecture.html#sgx', 'Trace the process boundary'),
-        card('02 / ISOLATION', 'TDX is a trust domain', 'A VM runs with private memory and CPU state protected from the host VMM. Guest OS and applications live inside the trust boundary, along with a larger trusted software stack.', 'architecture.html#tdx', 'Trace the VM boundary'),
-        card('03 / DECISION', 'Attestation is a policy input', 'A signed quote is evidence about a measured environment, not a blanket verdict. A verifier checks authenticity and state; a relying party decides whether to release a secret.', 'attestation.html', 'Follow the evidence')
-    ]) + '</div>'
-    comparison = '''<div class="comparison"><table><thead><tr><th>Question</th><th>Intel SGX</th><th>Intel TDX</th></tr></thead><tbody><tr><td>Protected unit</td><td>Enclave inside a user process</td><td>Trust Domain (confidential VM)</td></tr><tr><td>Untrusted manager</td><td>Host application and OS</td><td>Host VMM / hypervisor</td></tr><tr><td>Work inside boundary</td><td>Selected code, data, enclave runtime</td><td>Guest firmware, OS, services, workload</td></tr><tr><td>Evidence to inspect</td><td>Enclave identity and signer attributes in SGX evidence</td><td>TD and runtime measurements plus TDX platform state</td></tr><tr><td>Typical blind spot</td><td>Host-controlled calls and data, page/access patterns</td><td>Shared pages, emulated devices, guest software and host-controlled timing</td></tr></tbody></table></div><p class="source-note">Protection details vary by processor generation and configuration. Do not infer side-channel immunity or availability from an “encrypted memory” label.</p>'''
-    paths = '<div class="route">' + ''.join([
-        route('01', 'Start with the attacker', 'Write down who controls the host, physical machine, network, guest, and verifier.', 'architecture.html#model', 'Build a threat model'),
-        route('02', 'Map SGX vs TDX', 'Compare enclave entry, VM entry/exit, private memory, shared data, and the trusted computing base.', 'architecture.html', 'Read the architecture'),
-        route('03', 'Learn the RATS vocabulary', 'Separate attester, evidence, verifier, reference values, result, and relying party.', 'attestation.html#roles', 'Follow the roles'),
-        route('04', 'Check the quote and policy', 'Inspect measurement, TCB status, freshness and key/session binding before secret release.', 'attestation.html#policy', 'Run the policy lab'),
-        route('05', 'Trace real attack surfaces', 'Host I/O, shared pages, malicious inputs, paging and microarchitectural leakage remain relevant.', 'architecture.html#surfaces', 'Review the boundaries'),
-        route('06', 'Move to a real stack', 'Check Linux, Intel DCAP, KVM TDX and Trustee. Hardware-free exercises come first.', 'labs.html', 'Open the lab guide')
-    ]) + '</div>'
-    bridges = '<div class="card-grid">' + ''.join([
-        card('ISA → TEE', 'RISC-V & CoVE', 'Compare Intel VM isolation with RISC-V confidential computing and the privilege model.', 'https://shundazhang.github.io/riscv-security-atlas/', 'Open RISC-V atlas'),
-        card('LEAKAGE', 'CPU side channels', 'A TEE changes who may read memory directly; it does not make cache or timing leakage disappear.', 'https://shundazhang.github.io/side-channel-atlas/index.html', 'Open side-channel atlas'),
-        card('LONG-TERM', 'PQC & attestation', 'Attestation chains, certificates, signatures and archived evidence also need crypto-agility planning.', 'https://shundazhang.github.io/quantum-pqc-atlas/', 'Open PQC atlas')
-    ]) + '</div>'
-    return hero + section('01 / ORIENTATION', 'One label, two very different perimeters', 'Use the protected unit—not the marketing term “TEE”—to choose the right mental model.', cards, 'white') + section('02 / SIDE BY SIDE', 'SGX and TDX at a glance', 'The question is not which one is “more secure”; it is which boundary matches the workload and attacker.', comparison) + section('03 / LEARNING PATH', 'Six steps from CPU isolation to secret release', 'For engineers who already know x86, virtualization and systems security, start at the boundary rather than at introductory CPU material.', paths, 'tinted', 'route') + section('04 / NEXT CONNECTIONS', 'Carry the model into adjacent topics', 'Use the same threat-model questions across architecture, leakage and cryptography.', bridges, 'white')
-
-
-def index_zh():
-    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">CONFIDENTIAL COMPUTING / SECURITY FIELD GUIDE</span><h1>先看清边界<br><em>再决定信任什么</em></h1><p>SGX 保护进程中的 enclave，TDX 保护虚拟机免受宿主机直接窥探。两者都需要远程证明、审慎的密钥释放策略，以及把不可信 I/O 和侧信道纳入考虑的威胁模型。</p><div class="buttons"><a class="button primary" href="#route">开始学习路径 ↗</a><a class="button ghost" href="attestation.zh.html">体验策略实验 ↗</a></div><div class="hero-note">先问保护了什么，再问还有什么暴露在外</div></div><div class="boundary-visual" role="img" aria-label="不可信宿主机中有 SGX enclave 与 TDX 信任域，它们拥有不同保护边界，并由远端验证者评估"><div class="visual-head"><span>TRUST BOUNDARIES / 01</span><span>HOST ≠ TEE</span></div><div class="host-box"><span>不可信宿主机 / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>进程级</small><b>SGX</b><p>应用中的 enclave<br>代码与数据</p></div><div class="protect-box"><small>虚拟机级</small><b>TDX</b><p>Guest VM 的私有内存<br>与 CPU 状态</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>证据 → 验证者 → 策略</span><strong>密钥？</strong></div></div></div></section>'''
-    cards = '<div class="card-grid">' + ''.join([
-        card('01 / 隔离', 'SGX 是 enclave', '进程选出一小部分代码和数据。内核协助创建 enclave，但不能直接读取其中内存。宿主应用和 enclave 运行时仍与安全相关。', 'architecture.zh.html#sgx', '追踪进程边界'),
-        card('02 / 隔离', 'TDX 是信任域', '虚拟机的私有内存和 CPU 状态受到保护，不让宿主 VMM 直接读取。Guest OS 和应用位于边界内，也扩大了可信软件栈。', 'architecture.zh.html#tdx', '追踪 VM 边界'),
-        card('03 / 决策', '证明是策略输入', '签名 quote 是关于测量环境的证据，不是“安全”判决。验证者检查真实性与状态，依赖方决定是否释放秘密。', 'attestation.zh.html', '跟随证据链')
-    ]) + '</div>'
-    comparison = '''<div class="comparison"><table><thead><tr><th>问题</th><th>Intel SGX</th><th>Intel TDX</th></tr></thead><tbody><tr><td>保护对象</td><td>用户进程中的 enclave</td><td>Trust Domain（机密虚拟机）</td></tr><tr><td>不可信管理者</td><td>宿主应用与 OS</td><td>宿主 VMM / Hypervisor</td></tr><tr><td>边界内的软件</td><td>选定代码、数据和 enclave 运行时</td><td>Guest 固件、OS、服务与工作负载</td></tr><tr><td>证明重点</td><td>SGX 证据中的 enclave 身份与签名者属性</td><td>TD 与运行时测量值及 TDX 平台状态</td></tr><tr><td>常见盲点</td><td>宿主控制的调用和输入、页面访问模式</td><td>共享页、模拟设备、Guest 软件与宿主控制的时序</td></tr></tbody></table></div><p class="source-note">具体保护属性随处理器代际和配置变化。不要从“内存已加密”直接推断具备抗侧信道能力或高可用性。</p>'''
-    paths = '<div class="route">' + ''.join([
-        route('01', '先定义攻击者', '写清宿主、物理机器、网络、Guest 与验证服务分别由谁控制。', 'architecture.zh.html#model', '建立威胁模型'),
-        route('02', '画出 SGX 与 TDX 边界', '比较 enclave 进入、VM 进入与退出、私有内存、共享数据和可信计算基。', 'architecture.zh.html', '阅读架构'),
-        route('03', '掌握 RATS 术语', '分清证明方、证据、验证者、参考值、证明结果与依赖方。', 'attestation.zh.html#roles', '跟随角色关系'),
-        route('04', '验证 quote 与策略', '在释放秘密前检查测量值、TCB 状态、新鲜度、密钥与会话绑定。', 'attestation.zh.html#policy', '运行策略实验'),
-        route('05', '追踪真实攻击面', '宿主 I/O、共享页、恶意输入、分页和微架构泄漏仍需审查。', 'architecture.zh.html#surfaces', '审查边界'),
-        route('06', '走向真实技术栈', '核对 Linux、Intel DCAP、KVM TDX 和 Trustee；先做无需专用硬件的实验。', 'labs.zh.html', '打开实验指南')
-    ]) + '</div>'
-    bridges = '<div class="card-grid">' + ''.join([
-        card('ISA → TEE', 'RISC-V 与 CoVE', '对照 Intel 的 VM 隔离与 RISC-V 机密计算和特权模型。', 'https://shundazhang.github.io/riscv-security-atlas/', '打开 RISC-V 专题'),
-        card('泄漏', 'CPU 侧信道', 'TEE 改变谁能直接读取内存，但不会让缓存和时序泄漏消失。', 'https://shundazhang.github.io/side-channel-atlas/index.html', '打开侧信道专题'),
-        card('长期安全', 'PQC 与远程证明', '证明链、证书、签名与长期保存的证据也要纳入密码敏捷性规划。', 'https://shundazhang.github.io/quantum-pqc-atlas/', '打开 PQC 专题')
-    ]) + '</div>'
-    return hero + section('01 / 定位', '同叫 TEE，边界并不相同', '先看被保护的对象，再决定如何理解和使用这项技术。', cards, 'white') + section('02 / 对照', 'SGX 与 TDX 速览', '关键不是哪个“更安全”，而是哪个边界符合工作负载和攻击者模型。', comparison) + section('03 / 学习路径', '从隔离到释放秘密的六步', '已有 x86、虚拟化或系统安全基础，可以直接从边界入手。', paths, 'tinted', 'route') + section('04 / 延伸', '把模型带入相邻专题', '架构、泄漏和密码学可以使用同一组威胁模型问题。', bridges, 'white')
-
-
 def page_hero(lang, crumb, title, intro):
-    home = '主页' if lang == 'zh' else 'OVERVIEW'
+    home = '总览' if lang == 'zh' else 'OVERVIEW'
     suffix = '.zh.html' if lang == 'zh' else '.html'
     return f'<section class="page-hero"><div class="wrap"><div class="crumb"><a href="index{suffix}">{home}</a> / {crumb}</div><h1>{title}</h1><p>{intro}</p></div></section>'
 
 
-def article_section(label, title, lead, content, section_id=''):
-    ident = f' id="{section_id}"' if section_id else ''
-    return f'<section class="article-section"{ident}><div class="wrap"><span class="kicker">{label}</span><h2>{title}</h2><p>{lead}</p>{content}</div></section>'
+def article(label, title, lead, content, ident=''):
+    aid = f' id="{ident}"' if ident else ''
+    return f'<section class="article-section"{aid}><div class="wrap"><span class="kicker">{label}</span><h2>{title}</h2><p>{lead}</p>{content}</div></section>'
 
 
 def detail(label, title, text):
     return f'<article class="detail-card"><span class="badge">{label}</span><h3>{title}</h3><p>{text}</p></article>'
 
 
-def architecture_en():
-    intro = page_hero('en', 'ARCHITECTURE', 'Draw the trust boundary<br><em>before drawing conclusions</em>', 'A TEE does not replace a system threat model. Compare what the CPU enforces, what software remains trusted, and what an adversarial host can still influence.')
-    model = '<div class="detail-grid">' + ''.join([
-        detail('ASSET', 'What is the secret?', 'Name the data, code, keys or computation being protected. Ask whether the secret ever enters shared memory, a log, a device buffer or an untrusted return value.'),
-        detail('ACTOR', 'Who is the attacker?', 'Distinguish a hostile application, kernel, hypervisor, neighboring workload, physical operator, and network peer. SGX and TDX place different actors outside the boundary.'),
-        detail('CONTROL', 'What can they schedule or supply?', 'The host may manage resources, interrupt or delay execution, and provide I/O. Such control creates availability and leakage concerns even when private memory is isolated.'),
-        detail('DECISION', 'What would evidence prove?', 'A measurement identifies a particular initial or runtime state, subject to evidence format and policy. It cannot prove arbitrary application correctness or future behavior.')
+def table(headers, rows):
+    return '<div class="comparison"><table><thead><tr>' + ''.join(f'<th>{h}</th>' for h in headers) + '</tr></thead><tbody>' + ''.join('<tr>' + ''.join(f'<td>{cell}</td>' for cell in row) + '</tr>' for row in rows) + '</tbody></table></div>'
+
+
+def index_en():
+    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">INTEL CONFIDENTIAL COMPUTING / HARDWARE FIELD GUIDE</span><h1>Understand SGX<br><em>and TDX from the CPU up</em></h1><p>Two independent mechanisms to learn on their own terms: SGX protects an enclave inside a process; TDX protects a guest VM. Start with supported hardware, memory structures, entry and exit, and the instructions each mechanism exposes.</p><div class="buttons"><a class="button primary" href="sgx.html">Explore SGX ↗</a><a class="button ghost" href="tdx.html">Explore TDX ↗</a></div><div class="hero-note">ARCHITECTURE → INSTRUCTIONS → SOFTWARE STACK → HANDS-ON CHECKS</div></div><div class="boundary-visual" role="img" aria-label="An untrusted host surrounds an SGX process enclave and a TDX virtual machine, with different CPU instruction paths"><div class="visual-head"><span>CPU ISOLATION / TWO MODELS</span><span>SGX ≠ TDX</span></div><div class="host-box"><span>HOST APPLICATION / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>PROCESS-LEVEL</small><b>SGX</b><p>EPC + EPCM<br>ENCLS / ENCLU</p></div><div class="protect-box"><small>VM-LEVEL</small><b>TDX</b><p>SEAM + SEPT + PAMT<br>TDCALL / SEAMCALL</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>PRIVATE MEMORY ≠ SHARED I/O</span><strong>CPU</strong></div></div></div></section>'''
+    cards = '<div class="card-grid">' + ''.join([
+        card('01 / ENCLAVE', 'Intel SGX', 'Follow how enclave pages are built and measured, why EPCM checks matter, and how EENTER, EEXIT and AEX change execution.', 'sgx.html', 'Study SGX'),
+        card('02 / TRUST DOMAIN', 'Intel TDX', 'Follow a TD from host creation through guest entry, private page acceptance and exits. Separate TDCALL from SEAMCALL and TDVMCALL.', 'tdx.html', 'Study TDX'),
+        card('03 / PRACTICE', 'Hardware and software stack', 'Check CPU model, firmware enablement, Linux interfaces, module version and samples before assuming either feature is usable.', 'labs.html', 'Open the lab guide')
     ]) + '</div>'
-    sgx = '<div class="split"><div class="panel"><h3>Inside the enclave</h3><ul><li>Selected code and data live in enclave pages; CPU-enforced access control blocks direct reads from other software.</li><li>Enclave identity and signer attributes can be reflected in attestation evidence.</li><li>Smaller protected code can reduce the software TCB, but an enclave runtime and its interfaces still need review.</li></ul></div><div class="panel"><h3>Outside the enclave</h3><ul><li>Host process and OS perform ordinary I/O, scheduling and resource management.</li><li>ECALL/OCALL-style transitions and untrusted inputs require validation and careful serialization.</li><li>Access patterns, interrupts, page behavior and microarchitectural leakage remain part of the security analysis.</li></ul></div></div><p class="source-note">Start with the <a class="inline-link" href="https://docs.kernel.org/arch/x86/sgx.html">Linux SGX architecture guide</a>; consult the actual platform generation and SGX SDK/DCAP versions before claiming a specific memory-integrity property.</p>'
-    tdx = '<div class="split"><div class="panel"><h3>Inside the TD</h3><ul><li>The guest VM runs with private memory and CPU state isolated from the host VMM by TDX hardware and module mechanisms.</li><li>Guest firmware, OS, drivers and workload are inside the owner’s trust decision; attest and patch the stack you actually run.</li><li>TD and runtime measurements can contribute to a policy decision before secrets enter the guest.</li></ul></div><div class="panel"><h3>Outside the TD</h3><ul><li>The VMM still controls resource allocation and may deny service; TDX does not promise availability against it.</li><li>Shared pages, virtual devices, MMIO, hypercalls and host-provided CPUID/MSR data are explicit trust crossings.</li><li>Guest software must treat such inputs as hostile; the encryption boundary does not sanitize them.</li></ul></div></div><p class="source-note">The <a class="inline-link" href="https://docs.kernel.org/security/snp-tdx-threat-model.html">Linux CoCo threat model</a> and <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/best-practices/trusted-domain-security-guidance-for-developers.html">Intel TD developer guidance</a> give concrete host interfaces to review.</p>'
-    surfaces = '<div class="comparison"><table><thead><tr><th>Surface</th><th>Question for the reviewer</th><th>What the TEE does not settle</th></tr></thead><tbody><tr><td>Shared memory &amp; I/O</td><td>Who writes the buffer and who checks its length, origin and lifetime?</td><td>Host-provided bytes remain untrusted, even if copied into private memory.</td></tr><tr><td>Measurement &amp; boot</td><td>Which firmware, kernel, configuration and workload does the measurement cover?</td><td>A valid quote may identify the wrong image for your policy.</td></tr><tr><td>Side channels</td><td>Can timing, cache activity, interrupts or access patterns reveal secrets?</td><td>Direct memory isolation does not imply constant-time execution.</td></tr><tr><td>Availability</td><td>Can an untrusted manager pause, reset, starve or terminate the workload?</td><td>Confidentiality and integrity do not guarantee progress.</td></tr><tr><td>Updates &amp; rollback</td><td>Which TCB levels are acceptable, and who maintains reference values?</td><td>Signed but outdated evidence may not meet your current policy.</td></tr></tbody></table></div>'
-    closing = '<div class="signal"><strong>A useful security claim has boundaries</strong>“This workload, in this measured guest or enclave, on a platform meeting this TCB policy, received this secret through a channel bound to this attestation result.” Then state what remains outside that claim.</div>'
-    return intro + article_section('01 / THREAT MODEL', 'Begin with five concrete questions', 'These questions keep the protected asset, attacker and trusted computing base visible.', model, 'model') + article_section('02 / SGX', 'A protected region inside a process', 'SGX is a process-level enclave mechanism. It changes memory access rules, but applications still need secure interfaces and runtime code.', sgx, 'sgx') + article_section('03 / TDX', 'A protected guest inside a host', 'TDX is a VM-level confidential-computing mechanism. The host VMM remains a manager, but is excluded from direct access to TD private state.', tdx, 'tdx') + article_section('04 / ATTACK SURFACES', 'Review every crossing, not just DRAM', 'An attacker can still influence data and timing at boundaries exposed by the workload.', surfaces, 'surfaces') + article_section('05 / CLAIM', 'Write the assurance statement precisely', 'A TEE is useful when its security claim can be tested against evidence and policy.', closing)
-
-
-def architecture_zh():
-    intro = page_hero('zh', '架构与边界', '先画信任边界<br><em>再讨论安全结论</em>', 'TEE 不能替代系统威胁模型。需要分清 CPU 强制保护了什么、哪些软件仍须信任、恶意宿主仍能影响什么。')
-    model = '<div class="detail-grid">' + ''.join([
-        detail('资产', '要保护的秘密是什么？', '明确数据、代码、密钥或计算。追踪秘密是否进入共享内存、日志、设备缓冲区或不可信返回值。'),
-        detail('攻击者', '谁掌握哪一级权限？', '区分恶意应用、内核、Hypervisor、相邻工作负载、物理操作者与网络对端。SGX 和 TDX 将不同角色排除在边界外。'),
-        detail('控制权', '攻击者能安排或提供什么？', '宿主可能管理资源、打断或延迟执行并提供 I/O。即使私有内存被隔离，这些控制仍影响可用性和泄漏面。'),
-        detail('判断', '证据究竟能证明什么？', '测量值可标识某个初始或运行状态，但含义取决于证据格式和策略。它不能证明任意应用都正确，也不能保证未来行为。')
+    compare = table(('Question', 'SGX', 'TDX'), [
+        ('Protected unit', 'Enclave within a process', 'Trust Domain: a confidential VM'),
+        ('Primary CPU structures', 'EPC pages, EPCM metadata, SECS and TCS', 'SEAM/TDX module, Secure EPT, PAMT and private KeyIDs'),
+        ('Main call boundary', 'ENCLS by privileged software; ENCLU by user/enclave code', 'SEAMCALL by host; TDCALL by guest TD'),
+        ('Memory outside boundary', 'Ordinary process memory is untrusted to the enclave', 'Shared guest pages and device I/O remain visible to the host'),
+        ('Software integration', 'Partition code or use an enclave runtime', 'Run a TD-aware guest OS and VMM stack')
+    ])
+    path = '<div class="route">' + ''.join([
+        route('01', 'Check the platform', 'Distinguish CPU support, firmware enablement, OS driver and actual usable device nodes.', 'labs.html#hardware', 'Run support checks'),
+        route('02', 'Trace SGX memory', 'Understand EPC, EPCM, SECS, TCS and the measured enclave build.', 'sgx.html#memory', 'Open SGX memory model'),
+        route('03', 'Read SGX instruction flow', 'Follow ECREATE → EADD/EEXTEND → EINIT → EENTER/EEXIT and AEX/ERESUME.', 'sgx.html#instructions', 'Open SGX instruction map'),
+        route('04', 'Trace TDX memory', 'Understand SEAM, private KeyIDs, PAMT, Secure EPT and private/shared pages.', 'tdx.html#memory', 'Open TDX memory model'),
+        route('05', 'Read TDX call flow', 'Follow host SEAMCALLs and guest TDCALLs, including TDG.VP.VMCALL.', 'tdx.html#calls', 'Open TDX call map'),
+        route('06', 'Revisit in source', 'Map each architectural step to Linux KVM, guest code, Intel specs and a reproducible lab.', 'labs.html#sources', 'Open primary sources')
     ]) + '</div>'
-    sgx = '<div class="split"><div class="panel"><h3>Enclave 内部</h3><ul><li>选定代码和数据位于 enclave 页面；CPU 强制访问控制阻止其他软件直接读取。</li><li>enclave 身份与签名者属性可体现在远程证明证据中。</li><li>较小的受保护代码有利于缩小软件 TCB，但运行时和接口仍需审查。</li></ul></div><div class="panel"><h3>Enclave 外部</h3><ul><li>宿主进程和 OS 负责普通 I/O、调度与资源管理。</li><li>ECALL/OCALL 等边界跨越及不可信输入需要验证与安全序列化。</li><li>访问模式、中断、页面行为与微架构泄漏仍属于安全分析范围。</li></ul></div></div><p class="source-note">先读 <a class="inline-link" href="https://docs.kernel.org/arch/x86/sgx.html">Linux SGX 架构说明</a>；涉及内存完整性时，需按具体处理器代际与 SDK/DCAP 版本核对，不能笼统断言。</p>'
-    tdx = '<div class="split"><div class="panel"><h3>TD 内部</h3><ul><li>Guest VM 的私有内存和 CPU 状态由 TDX 硬件与模块机制隔离，宿主 VMM 不能直接读取。</li><li>Guest 固件、OS、驱动和工作负载属于所有者的信任决策，必须证明和更新实际运行的软件栈。</li><li>TD 与运行时测量值可在秘密进入 Guest 前参与策略判断。</li></ul></div><div class="panel"><h3>TD 外部</h3><ul><li>VMM 仍负责资源分配，并可能拒绝服务；TDX 不承诺对恶意宿主提供可用性。</li><li>共享页、虚拟设备、MMIO、Hypercall 与宿主提供的 CPUID/MSR 数据都是明确的信任跨越。</li><li>Guest 软件必须把这些输入视为不可信；内存加密边界不会自动清理它们。</li></ul></div></div><p class="source-note"><a class="inline-link" href="https://docs.kernel.org/security/snp-tdx-threat-model.html">Linux CoCo 威胁模型</a>和<a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/best-practices/trusted-domain-security-guidance-for-developers.html">Intel TD 开发者安全指南</a>列出了值得审查的宿主接口。</p>'
-    surfaces = '<div class="comparison"><table><thead><tr><th>攻击面</th><th>审查问题</th><th>TEE 未自动解决的事</th></tr></thead><tbody><tr><td>共享内存与 I/O</td><td>谁写入缓冲区？谁检查长度、来源和生命周期？</td><td>宿主提供的字节即使被复制进私有内存，仍是不可信输入。</td></tr><tr><td>测量与启动</td><td>测量值覆盖哪些固件、内核、配置与工作负载？</td><td>有效 quote 仍可能代表不符合自身策略的镜像。</td></tr><tr><td>侧信道</td><td>时序、缓存、中断或访问模式能否透露秘密？</td><td>直接内存隔离不等于常数时间执行。</td></tr><tr><td>可用性</td><td>不可信管理者能否暂停、重置、饿死或终止工作负载？</td><td>机密性和完整性不保证进展。</td></tr><tr><td>更新与回滚</td><td>接受哪些 TCB 级别？参考值由谁维护？</td><td>有签名但过时的证据未必符合当前策略。</td></tr></tbody></table></div>'
-    closing = '<div class="signal"><strong>有用的安全声明必须带边界</strong>“这个工作负载位于这台满足 TCB 策略的平台上、这个经过测量的 Guest 或 enclave 中，并通过与证明结果绑定的通道收到了秘密。”随后说明这一声明没有覆盖什么。</div>'
-    return intro + article_section('01 / 威胁模型', '先回答五个具体问题', '让受保护资产、攻击者与可信计算基始终可见。', model, 'model') + article_section('02 / SGX', '进程中的受保护区域', 'SGX 是进程级 enclave 机制。它改变了内存访问规则，但应用仍需要安全的接口和运行时代码。', sgx, 'sgx') + article_section('03 / TDX', '宿主机中的受保护 Guest', 'TDX 是虚拟机级机密计算机制。宿主 VMM 继续管理资源，但不能直接访问 TD 私有状态。', tdx, 'tdx') + article_section('04 / 攻击面', '审查每一次边界跨越', '攻击者仍可能通过工作负载暴露的边界影响数据和时序。', surfaces, 'surfaces') + article_section('05 / 安全声明', '把保证写得足够精确', 'TEE 只有在安全声明可对照证据与策略检验时才真正有用。', closing)
+    brief = '<div class="signal"><strong>Remote attestation in one paragraph</strong>SGX and TDX can produce measured reports and remote quotes. A remote verifier checks evidence against a policy before an application trusts the environment. This site introduces those instructions only; quote formats, certificate chains and key release deserve a separate attestation study.</div>'
+    return hero + section('01 / THE TWO MECHANISMS', 'Learn each boundary on its own terms', 'SGX and TDX solve different isolation problems. The pages below go into the CPU mechanisms, not a single unified deployment story.', cards, 'white') + section('02 / ARCHITECTURE MAP', 'The important differences at a glance', 'Use this as a map before reading the instruction tables.', compare) + section('03 / LEARNING ROUTE', 'Six concrete steps', 'The route assumes familiarity with x86, virtual memory and virtualization; it goes straight to the new mechanisms.', path, 'tinted') + section('04 / BRIEF CONTEXT', 'Where attestation fits', 'A small bridge from local isolation to remote use, without making it the center of this site.', brief, 'white', 'attestation')
 
 
-def attestation_en():
-    intro = page_hero('en', 'ATTESTATION', 'A quote is evidence<br><em>not authorization</em>', 'Remote attestation tells a verifier something about a measured environment. Only an application policy can decide whether that is enough to release a key, admit a workload, or trust a result.')
-    roles = '<div class="flow">' + ''.join([
-        '<div class="flow-item"><span class="num">01 / ATTESTER</span><h3>Produce evidence</h3><p>The enclave or TD requests a hardware-backed report and quote.</p></div>',
-        '<div class="flow-item"><span class="num">02 / ENDORSER</span><h3>Supply collateral</h3><p>Manufacturer material helps establish a quote verification chain and platform status.</p></div>',
-        '<div class="flow-item"><span class="num">03 / VERIFIER</span><h3>Appraise evidence</h3><p>Check signatures, TCB, measurement and freshness against reference values.</p></div>',
-        '<div class="flow-item"><span class="num">04 / RESULT</span><h3>Return claims</h3><p>A verifier issues an attestation result with scoped claims and validity.</p></div>',
-        '<div class="flow-item"><span class="num">05 / RELYING PARTY</span><h3>Apply policy</h3><p>The key service decides whether and how to release a secret.</p></div>'
-    ]) + '</div><p class="source-note">These role names follow <a class="inline-link" href="https://www.rfc-editor.org/rfc/rfc9334.html">RFC 9334 (RATS)</a>. Implementations may combine roles or use different wire protocols.</p>'
-    tracks = '<div class="comparison"><table><thead><tr><th>Step</th><th>SGX / DCAP</th><th>TDX / DCAP</th></tr></thead><tbody><tr><td>Local statement</td><td>The enclave creates a report carrying identity and application-chosen report data.</td><td>The TD obtains a TDREPORT carrying TD measurements and report data.</td></tr><tr><td>Remote evidence</td><td>Quoting infrastructure produces an SGX quote for remote verification.</td><td>Quoting infrastructure produces a TDX quote from the TD report.</td></tr><tr><td>What policy sees</td><td>Enclave identity/signer, attributes and platform TCB status.</td><td>TD measurements, runtime measurements, attributes and platform TCB status.</td></tr><tr><td>Owner decision</td><td>Allow only the enclave identity and state expected by the application.</td><td>Allow only the guest image, runtime state and TCB expected by the application.</td></tr></tbody></table></div><p class="source-note">This is a conceptual route, not a byte-level quote parser. Check the current <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html">Intel TDX documentation</a> and <a class="inline-link" href="https://github.com/intel/confidential-computing.sgx">Intel SGX/DCAP repository</a> for concrete formats and APIs.</p>'
-    rules = '<ul class="checklist"><li><b>01</b> Verify the quote signature and certificate/collateral chain against the intended trust anchors.</li><li><b>02</b> Compare measurements, attributes, debug mode and workload configuration to owner-controlled reference values.</li><li><b>03</b> Check platform TCB status, revocation and patch policy; “signed” is not synonymous with “currently acceptable.”</li><li><b>04</b> Require freshness appropriate to the protocol, for example a verifier challenge or bounded evidence lifetime.</li><li><b>05</b> Bind evidence to an authenticated session or ephemeral public key before sending a secret; otherwise the recipient can be substituted.</li><li><b>06</b> Limit the released secret by workload, time, purpose and rotation policy, and log the decision.</li></ul>'
-    lab = '''<div class="policy-lab" data-policy-lab><h3>Practice: would you release the test secret?</h3><p>Choose a hypothetical evidence bundle. This browser-only illustration checks five policy gates; it does not generate or validate a hardware quote and never handles a real secret.</p><div class="scenario-buttons" role="group" aria-label="Sample evidence scenarios"><button type="button" data-scenario="healthy">Expected state</button><button type="button" data-scenario="stale">Stale challenge</button><button type="button" data-scenario="changed">Changed image</button><button type="button" data-scenario="unbound">Unbound key</button><button type="button" data-scenario="outdated">Outdated TCB</button></div><div class="lab-grid"><ul class="checks" data-checks aria-label="Policy checks"></ul><div class="verdict" role="status" aria-live="polite"><strong data-verdict></strong><p data-verdict-detail></p></div></div></div>'''
-    pitfall = '<div class="detail-grid">' + ''.join([
-        detail('REPLAY', 'Old quote, new request', 'A once-valid quote may be replayed if the relying party does not enforce freshness and bind the evidence to this request.'),
-        detail('CONFUSION', 'Right platform, wrong code', 'A valid platform chain does not mean the enclave, guest image or workload matches the owner’s approved reference values.'),
-        detail('SUBSTITUTION', 'Good quote, wrong recipient', 'If a session key is not bound to the attested environment, an attacker can relay evidence and receive the secret elsewhere.'),
-        detail('STATUS', 'Signature valid, TCB stale', 'Authentic evidence may describe a platform that fails the owner’s update or revocation policy.')
+def index_zh():
+    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">INTEL CONFIDENTIAL COMPUTING / HARDWARE FIELD GUIDE</span><h1>从 CPU 出发<br><em>读懂 SGX 与 TDX</em></h1><p>把两项机制分别学清楚：SGX 保护进程中的 enclave，TDX 保护一个 Guest VM。先看硬件支持、内存结构、进入与退出，再读各自暴露的指令和调用。</p><div class="buttons"><a class="button primary" href="sgx.zh.html">学习 SGX ↗</a><a class="button ghost" href="tdx.zh.html">学习 TDX ↗</a></div><div class="hero-note">架构 → 指令 → 软件栈 → 动手检查</div></div><div class="boundary-visual" role="img" aria-label="不可信宿主包含 SGX enclave 与 TDX 虚拟机，两者有不同 CPU 指令路径"><div class="visual-head"><span>CPU ISOLATION / TWO MODELS</span><span>SGX ≠ TDX</span></div><div class="host-box"><span>宿主应用 / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>进程级</small><b>SGX</b><p>EPC + EPCM<br>ENCLS / ENCLU</p></div><div class="protect-box"><small>虚拟机级</small><b>TDX</b><p>SEAM + SEPT + PAMT<br>TDCALL / SEAMCALL</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>私有内存 ≠ 共享 I/O</span><strong>CPU</strong></div></div></div></section>'''
+    cards = '<div class="card-grid">' + ''.join([
+        card('01 / ENCLAVE', 'Intel SGX', '跟随 enclave 页面构建与测量，理解 EPCM 检查，以及 EENTER、EEXIT 和 AEX 如何改变执行。', 'sgx.zh.html', '学习 SGX'),
+        card('02 / TRUST DOMAIN', 'Intel TDX', '跟随 TD 从宿主创建到 Guest 进入、私有页接受与退出；分清 TDCALL、SEAMCALL 和 TDVMCALL。', 'tdx.zh.html', '学习 TDX'),
+        card('03 / 实践', '硬件与软件栈', '核对 CPU 型号、固件开关、Linux 接口、模块版本与样例，再判断功能是否真的可用。', 'labs.zh.html', '打开实验指南')
     ]) + '</div>'
-    return intro + article_section('01 / RATS ROLES', 'Five roles, one decision chain', 'Keep evidence appraisal separate from authorization. This makes trust assumptions visible.', roles, 'roles') + article_section('02 / PLATFORM TRACKS', 'How SGX and TDX evidence differ', 'Both use a report-to-quote pattern, but the measured subject and policy fields differ.', tracks) + article_section('03 / POLICY', 'Six gates before secret release', 'The exact format is platform-specific. These questions apply to most attestation-driven key-release systems.', rules, 'policy') + article_section('04 / INTERACTIVE LAB', 'Try the policy decisions', 'Change one claim at a time to see why a single failure should stop release.', lab) + article_section('05 / FAILURE MODES', 'Four mistakes worth memorizing', 'A verified signature alone cannot settle any of these.', pitfall)
-
-
-def attestation_zh():
-    intro = page_hero('zh', '远程证明', 'Quote 是证据<br><em>不是授权决定</em>', '远程证明让验证者了解被测量环境。只有应用策略才能决定这些信息是否足以释放密钥、接纳工作负载或信任结果。')
-    roles = '<div class="flow">' + ''.join([
-        '<div class="flow-item"><span class="num">01 / 证明方</span><h3>产生证据</h3><p>Enclave 或 TD 请求硬件支持的 report 与 quote。</p></div>',
-        '<div class="flow-item"><span class="num">02 / 背书方</span><h3>提供证明材料</h3><p>厂商材料帮助建立 quote 验证链并判断平台状态。</p></div>',
-        '<div class="flow-item"><span class="num">03 / 验证者</span><h3>评估证据</h3><p>对照参考值验证签名、TCB、测量值与新鲜度。</p></div>',
-        '<div class="flow-item"><span class="num">04 / 结果</span><h3>返回声明</h3><p>验证者签发有范围和有效期的证明结果。</p></div>',
-        '<div class="flow-item"><span class="num">05 / 依赖方</span><h3>应用策略</h3><p>密钥服务决定是否及如何释放秘密。</p></div>'
-    ]) + '</div><p class="source-note">这些角色名称来自 <a class="inline-link" href="https://www.rfc-editor.org/rfc/rfc9334.html">RFC 9334（RATS）</a>。具体实现可以合并角色或使用不同协议。</p>'
-    tracks = '<div class="comparison"><table><thead><tr><th>步骤</th><th>SGX / DCAP</th><th>TDX / DCAP</th></tr></thead><tbody><tr><td>本地声明</td><td>Enclave 生成含身份和应用自选 report data 的 report。</td><td>TD 获得包含 TD 测量值和 report data 的 TDREPORT。</td></tr><tr><td>远程证据</td><td>引用基础设施生成可供远程验证的 SGX quote。</td><td>引用基础设施根据 TD report 生成 TDX quote。</td></tr><tr><td>策略查看</td><td>Enclave 身份/签名者、属性和平台 TCB 状态。</td><td>TD 测量值、运行时测量值、属性和平台 TCB 状态。</td></tr><tr><td>所有者决策</td><td>仅接受应用预期的 enclave 身份与状态。</td><td>仅接受应用预期的 Guest 镜像、运行状态与 TCB。</td></tr></tbody></table></div><p class="source-note">此处是概念流程，不是逐字节 quote 解析器。具体格式和 API 请核对最新 <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html">Intel TDX 文档</a>及 <a class="inline-link" href="https://github.com/intel/confidential-computing.sgx">Intel SGX/DCAP 仓库</a>。</p>'
-    rules = '<ul class="checklist"><li><b>01</b> 对照预期信任锚验证 quote 签名、证书与证明材料链。</li><li><b>02</b> 把测量值、属性、调试模式和工作负载配置与所有者维护的参考值比较。</li><li><b>03</b> 检查平台 TCB 状态、撤销和补丁策略；“有签名”不等于“当前可接受”。</li><li><b>04</b> 按协议要求新鲜度，例如验证者挑战值或证据有效期限制。</li><li><b>05</b> 发送秘密前把证据绑定到认证会话或临时公钥，否则收件者可能被替换。</li><li><b>06</b> 按工作负载、时间和用途限制秘密，并记录决策与轮换策略。</li></ul>'
-    lab = '''<div class="policy-lab" data-policy-lab><h3>练习：你会释放测试秘密吗？</h3><p>选择一份假设的证据包。这个纯浏览器示意检查五道策略门槛；它不会生成或验证真实硬件 quote，也不处理真实秘密。</p><div class="scenario-buttons" role="group" aria-label="示例证据场景"><button type="button" data-scenario="healthy">预期状态</button><button type="button" data-scenario="stale">过期挑战</button><button type="button" data-scenario="changed">镜像变化</button><button type="button" data-scenario="unbound">密钥未绑定</button><button type="button" data-scenario="outdated">TCB 过旧</button></div><div class="lab-grid"><ul class="checks" data-checks aria-label="策略检查"></ul><div class="verdict" role="status" aria-live="polite"><strong data-verdict></strong><p data-verdict-detail></p></div></div></div>'''
-    pitfall = '<div class="detail-grid">' + ''.join([
-        detail('重放', '旧 quote，新请求', '如果依赖方不检查新鲜度、不把证据绑定到当前请求，过去有效的 quote 可以被重放。'),
-        detail('混淆', '平台正确，代码错误', '有效的平台证明链不代表 enclave、Guest 镜像或工作负载符合所有者的参考值。'),
-        detail('替换', 'Quote 正确，收件者错误', '如果会话密钥未绑定到被证明环境，攻击者可能转发证据，在其他地方收到秘密。'),
-        detail('状态', '签名有效，TCB 过时', '真实证据也可能描述未通过所有者更新或撤销策略的平台。')
+    compare = table(('问题', 'SGX', 'TDX'), [
+        ('保护对象', '进程中的 enclave', 'Trust Domain：机密虚拟机'),
+        ('主要 CPU 结构', 'EPC 页面、EPCM 元数据、SECS 与 TCS', 'SEAM/TDX 模块、Secure EPT、PAMT 与私有 KeyID'),
+        ('主要调用边界', '特权软件用 ENCLS；用户态/enclave 用 ENCLU', '宿主用 SEAMCALL；Guest TD 用 TDCALL'),
+        ('边界外内存', '普通进程内存对 enclave 不可信', 'Guest 共享页与设备 I/O 对宿主可见'),
+        ('软件接入', '拆分代码或使用 enclave 运行时', '使用支持 TD 的 Guest OS 与 VMM 软件栈')
+    ])
+    path = '<div class="route">' + ''.join([
+        route('01', '先检查平台', '分开核对 CPU 支持、固件开关、OS 驱动和可用的设备节点。', 'labs.zh.html#hardware', '运行支持检查'),
+        route('02', '追踪 SGX 内存', '理解 EPC、EPCM、SECS、TCS 与经过测量的 enclave 构建。', 'sgx.zh.html#memory', '看 SGX 内存模型'),
+        route('03', '读 SGX 指令路径', '跟随 ECREATE → EADD/EEXTEND → EINIT → EENTER/EEXIT 及 AEX/ERESUME。', 'sgx.zh.html#instructions', '看 SGX 指令地图'),
+        route('04', '追踪 TDX 内存', '理解 SEAM、私有 KeyID、PAMT、Secure EPT 与私有/共享页。', 'tdx.zh.html#memory', '看 TDX 内存模型'),
+        route('05', '读 TDX 调用路径', '跟随宿主 SEAMCALL 与 Guest TDCALL，包括 TDG.VP.VMCALL。', 'tdx.zh.html#calls', '看 TDX 调用地图'),
+        route('06', '回到源码', '把每一步对应到 Linux KVM、Guest 代码、Intel 规范与可复现实验。', 'labs.zh.html#sources', '打开一手资料')
     ]) + '</div>'
-    return intro + article_section('01 / RATS 角色', '五种角色，一条决策链', '把证据评估和授权分开，才能看见真正的信任假设。', roles, 'roles') + article_section('02 / 平台证据', 'SGX 与 TDX 的证据差异', '两者都可走 report 到 quote 的路径，但测量对象与策略字段不同。', tracks) + article_section('03 / 策略', '释放秘密前的六道门槛', '具体格式依赖平台，但这些问题适用于多数由远程证明驱动的密钥释放系统。', rules, 'policy') + article_section('04 / 交互实验', '试做策略决策', '每次改变一项声明，观察为什么一项失败就应停止释放。', lab) + article_section('05 / 失败模式', '值得记住的四种错误', '仅验证签名不能解决其中任何一项。', pitfall)
+    brief = '<div class="signal"><strong>用一段话定位远程证明</strong>SGX 与 TDX 可产生带测量信息的 report 和远程 quote；远端验证者按策略检查证据，应用才决定是否信任该环境。本站只介绍相关指令的作用。Quote 格式、证书链与密钥释放将留给独立的远程证明专题。</div>'
+    return hero + section('01 / 两项机制', '分别学清各自的边界', 'SGX 与 TDX 解决不同隔离问题。下面的章节深入 CPU 机制，不把它们强行塞进一条部署故事。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '六个具体步骤', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
+
+
+def sgx_en():
+    hero = page_hero('en', 'INTEL SGX', 'An enclave is a new<br><em>CPU access boundary</em>', 'Understand the physical EPC and EPCM checks, how an enclave is measured and initialized, and which instructions cross the boundary.')
+    hardware = '<div class="detail-grid">' + ''.join([
+        detail('CPU', 'Check the exact processor', 'SGX support is SKU-specific. Intel lists supported Xeon families and models; older consumer CPUs vary. CPUID leaf 0x12 enumerates SGX capabilities when enabled.'),
+        detail('FIRMWARE', 'Enable it in BIOS/UEFI', 'A capable CPU is not sufficient if platform firmware disables SGX or allocates no EPC. BIOS policy can also affect launch control and EPC size.'),
+        detail('OS', 'Look for the Linux interface', 'The Linux SGX driver exposes /dev/sgx_enclave for enclave construction. A missing device can mean unsupported hardware, disabled firmware, or missing kernel support.'),
+        detail('VARIANTS', 'Separate SGX1 from SGX2', 'SGX1 provides the baseline enclave lifecycle. SGX2 adds dynamic page management; software must check what the running platform enumerates.')
+    ]) + '</div><p class="source-note">Hardware references: <a class="inline-link" href="https://www.intel.com/content/www/us/en/architecture-and-technology/software-guard-extensions-processors.html">Intel processor list</a> and <a class="inline-link" href="https://docs.kernel.org/arch/x86/sgx.html">Linux SGX guide</a>.</p>'
+    memory = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>EPC</b><span>Enclave Page Cache: protected physical pages for enclave code, data and metadata. The OS manages allocation and paging, but cannot directly read a live enclave page.</span></div>',
+        '<div class="stack-row"><b>EPCM</b><span>Enclave Page Cache Map: CPU-maintained metadata identifying page ownership, type and permissions. EPCM checks add restrictions beyond ordinary page tables.</span></div>',
+        '<div class="stack-row"><b>SECS</b><span>Enclave Control Structure: enclave-wide attributes, range and identity state used during creation.</span></div>',
+        '<div class="stack-row"><b>TCS</b><span>Thread Control Structure: an entry point and execution state for one enclave thread.</span></div>'
+    ]) + '</div><div class="signal" style="margin-top:20px"><strong>Why the OS page table is not enough</strong>The OS still maps virtual addresses and manages resources. The CPU also checks EPCM ownership and permissions before an enclave page is used. Memory encryption and integrity details vary across SGX processor generations; check the actual platform rather than assuming one uniform property.</div>'
+    instructions = table(('Class / privilege', 'Leaf', 'What to remember'), [
+        ('ENCLS · privileged', '<code>ECREATE</code>', 'Create SECS and begin a new enclave.'),
+        ('ENCLS · privileged', '<code>EADD</code> / <code>EEXTEND</code>', 'Add EPC pages and extend the measurement over selected contents.'),
+        ('ENCLS · privileged', '<code>EINIT</code>', 'Validate initialization requirements and finalize the enclave before entry.'),
+        ('ENCLS · privileged', '<code>EREMOVE</code>', 'Remove an EPC page during teardown or reclamation.'),
+        ('ENCLU · user', '<code>EENTER</code> / <code>EEXIT</code>', 'Enter and leave enclave execution through its defined interface.'),
+        ('ENCLU · user', '<code>ERESUME</code>', 'Resume after an asynchronous enclave exit (AEX).'),
+        ('ENCLU · enclave', '<code>EREPORT</code> / <code>EGETKEY</code>', 'Create a local report or derive an enclave-specific key.'),
+        ('SGX2 · optional', '<code>EACCEPT</code>', 'Accept dynamically added or modified pages where SGX2 is supported.')
+    ]) + '<p class="source-note">ENCLS/ENCLU names refer to instruction groups; the named operations are leaves. See Intel’s <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/articles/technical/overview-of-an-intel-software-guard-extensions-enclave-life-cycle.html">enclave lifecycle overview</a> and the <a class="inline-link" href="https://www.intel.com/content/dam/develop/external/us/en/documents/329298-002-629101.pdf">programming reference</a> for operands and exceptions.</p>'
+    flow = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>BUILD</b><span>OS/runtime: ECREATE → EADD pages → EEXTEND measured content → EINIT.</span></div>',
+        '<div class="stack-row"><b>RUN</b><span>Host thread: EENTER → enclave code → EEXIT, with trusted/untrusted parameter handling at the interface.</span></div>',
+        '<div class="stack-row"><b>INTERRUPT</b><span>An interrupt or exception can trigger AEX (an event, not an instruction). The host handles it; ERESUME re-enters when appropriate.</span></div>',
+        '<div class="stack-row"><b>EXTEND</b><span>SGX2 may add/change pages dynamically, with enclave acceptance before use.</span></div>'
+    ]) + '</div>'
+    boundary = '<div class="split"><div class="panel"><h3>Inside the enclave</h3><p>Keep secrets and only the code that needs them. Validate every value returned by host calls. Minimize runtime and serialization logic that must be trusted.</p></div><div class="panel"><h3>Outside the enclave</h3><p>The OS and host process can schedule, interrupt and feed input. Page-fault patterns, caches and timing may reveal information unless the application accounts for them.</p></div></div>'
+    return hero + article('01 / PLATFORM SUPPORT', 'First verify hardware and firmware', '“This CPU family supports SGX” does not prove the particular machine exposes a usable enclave facility.', hardware, 'hardware') + article('02 / MEMORY MODEL', 'Four structures to keep in view', 'Follow one page from ordinary memory into EPC and through CPU metadata checks.', memory, 'memory') + article('03 / INSTRUCTION MAP', 'Read the lifecycle as ENCLS and ENCLU', 'Do not memorize opcodes first. Group the leaves by who executes them and which state transition they make.', instructions, 'instructions') + article('04 / EXECUTION TRACE', 'One enclave from creation to interruption', 'AEX and resumption are especially important when reasoning about interrupts and untrusted scheduling.', flow, 'flow') + article('05 / SECURITY BOUNDARY', 'What isolation still leaves to software', 'The enclave protects direct access to its pages; its host interface and side-channel behavior are separate design work.', boundary)
+
+
+def sgx_zh():
+    hero = page_hero('zh', 'INTEL SGX', 'Enclave 是新的<br><em>CPU 访问边界</em>', '理解 EPC 与 EPCM 的硬件检查、enclave 如何测量和初始化，以及哪些指令跨越边界。')
+    hardware = '<div class="detail-grid">' + ''.join([
+        detail('CPU', '核对准确型号', 'SGX 支持与具体 SKU 有关。Intel 列出受支持的 Xeon 家族与型号；较早的消费级 CPU 情况不一。启用后可用 CPUID leaf 0x12 枚举 SGX 能力。'),
+        detail('固件', '在 BIOS/UEFI 中启用', '即使 CPU 有能力，固件禁用 SGX 或未分配 EPC 时仍无法使用。BIOS 策略还可能影响 launch control 和 EPC 大小。'),
+        detail('OS', '寻找 Linux 接口', 'Linux SGX 驱动通过 /dev/sgx_enclave 构建 enclave。设备缺失可能是硬件不支持、固件关闭或内核缺少支持。'),
+        detail('变体', '分清 SGX1 与 SGX2', 'SGX1 提供基本 enclave 生命周期；SGX2 增加动态页面管理，软件应检查实际平台枚举的能力。')
+    ]) + '</div><p class="source-note">硬件资料：<a class="inline-link" href="https://www.intel.com/content/www/us/en/architecture-and-technology/software-guard-extensions-processors.html">Intel 处理器列表</a>与 <a class="inline-link" href="https://docs.kernel.org/arch/x86/sgx.html">Linux SGX 导读</a>。</p>'
+    memory = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>EPC</b><span>Enclave Page Cache：保存 enclave 代码、数据和元数据的受保护物理页面。OS 管理分配和换页，但不能直接读取运行中的 enclave 页面。</span></div>',
+        '<div class="stack-row"><b>EPCM</b><span>Enclave Page Cache Map：CPU 维护的元数据，记录页面所有者、类型与权限。EPCM 检查在普通页表之外增加限制。</span></div>',
+        '<div class="stack-row"><b>SECS</b><span>Enclave Control Structure：创建时使用的全局属性、范围和身份状态。</span></div>',
+        '<div class="stack-row"><b>TCS</b><span>Thread Control Structure：一个 enclave 线程的入口与执行状态。</span></div>'
+    ]) + '</div><div class="signal" style="margin-top:20px"><strong>为什么 OS 页表还不够</strong>OS 仍映射虚拟地址并管理资源；CPU 使用 EPCM 再检查 enclave 页面所有权和权限。内存加密与完整性的细节因 SGX 处理器代际而异，不能假定所有平台具有完全相同的属性。</div>'
+    instructions = table(('指令组 / 权限', 'Leaf', '应记住的作用'), [
+        ('ENCLS · 特权态', '<code>ECREATE</code>', '创建 SECS，开始新 enclave。'),
+        ('ENCLS · 特权态', '<code>EADD</code> / <code>EEXTEND</code>', '添加 EPC 页面，对选定内容扩展测量值。'),
+        ('ENCLS · 特权态', '<code>EINIT</code>', '验证初始化条件，并在进入前完成 enclave 初始化。'),
+        ('ENCLS · 特权态', '<code>EREMOVE</code>', '在拆除或回收时移除 EPC 页面。'),
+        ('ENCLU · 用户态', '<code>EENTER</code> / <code>EEXIT</code>', '通过定义好的接口进入和离开 enclave 执行。'),
+        ('ENCLU · 用户态', '<code>ERESUME</code>', '在异步 enclave 退出（AEX）后恢复。'),
+        ('ENCLU · enclave', '<code>EREPORT</code> / <code>EGETKEY</code>', '生成本地报告或派生 enclave 专属密钥。'),
+        ('SGX2 · 可选', '<code>EACCEPT</code>', '在支持 SGX2 时接受动态加入或更改的页面。')
+    ]) + '<p class="source-note">ENCLS/ENCLU 是指令组，表中的名称是对应 leaf。操作数与异常请看 Intel 的 <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/articles/technical/overview-of-an-intel-software-guard-extensions-enclave-life-cycle.html">enclave 生命周期导读</a>和<a class="inline-link" href="https://www.intel.com/content/dam/develop/external/us/en/documents/329298-002-629101.pdf">编程参考</a>。</p>'
+    flow = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>构建</b><span>OS/运行时：ECREATE → EADD 页面 → EEXTEND 测量内容 → EINIT。</span></div>',
+        '<div class="stack-row"><b>运行</b><span>宿主线程：EENTER → enclave 代码 → EEXIT；边界上的可信/不可信参数要审查。</span></div>',
+        '<div class="stack-row"><b>中断</b><span>中断或异常可能触发 AEX（事件，不是一条指令）。宿主处理后，适当情况下用 ERESUME 再进入。</span></div>',
+        '<div class="stack-row"><b>扩展</b><span>SGX2 可动态增加或更改页面；enclave 接受后才能使用。</span></div>'
+    ]) + '</div>'
+    boundary = '<div class="split"><div class="panel"><h3>Enclave 内部</h3><p>只保留秘密和需要处理秘密的代码。校验宿主调用返回的每个值。尽量缩小必须信任的运行时与序列化逻辑。</p></div><div class="panel"><h3>Enclave 外部</h3><p>OS 和宿主进程可以调度、打断并提供输入。若应用未处理页面故障模式、缓存和时序，它们仍可能泄露信息。</p></div></div>'
+    return hero + article('01 / 平台支持', '先确认硬件与固件', '“这个 CPU 家族支持 SGX”并不证明眼前的机器提供可用的 enclave 功能。', hardware, 'hardware') + article('02 / 内存模型', '记住四个关键结构', '跟随一个页面从普通内存进入 EPC，并经过 CPU 元数据检查。', memory, 'memory') + article('03 / 指令地图', '按 ENCLS 与 ENCLU 读生命周期', '先按执行者和状态变化分组，再去记操作码。', instructions, 'instructions') + article('04 / 执行路径', '从创建到中断的一次运行', 'AEX 与恢复是理解中断和不可信调度的关键。', flow, 'flow') + article('05 / 安全边界', '隔离仍留给软件的问题', 'Enclave 阻止页面被直接读取；宿主接口和侧信道行为仍需单独设计。', boundary)
+
+
+def tdx_en():
+    hero = page_hero('en', 'INTEL TDX', 'A VM boundary enforced<br><em>below the hypervisor</em>', 'Follow the TDX module in SEAM, private memory translation, and the distinct calls made by a host VMM and a guest Trust Domain.')
+    hardware = '<div class="detail-grid">' + ''.join([
+        detail('CPU', 'Check the exact Xeon SKU', 'TDX host support begins with selected 4th Gen Intel Xeon Scalable processors and continues on selected later server platforms. Generation alone is not a support guarantee.'),
+        detail('FIRMWARE', 'Initialize the platform', 'BIOS/UEFI must enable TDX and configure SEAM, SEAMRR and private KeyIDs. A compatible Intel TDX module must be loaded before the host can create TDs.'),
+        detail('HOST', 'Check KVM and the VMM', 'The Linux host must initialize TDX; KVM and the VMM then provide the userspace VM creation path. Feature availability also depends on kernel and module ABI versions.'),
+        detail('GUEST', 'Use a TD-aware guest', 'A TD guest handles private/shared memory transitions, accepts pages when required, and uses TDCALL for TDX module services or host-assisted operations.')
+    ]) + '</div><p class="source-note">Start with Intel’s <a class="inline-link" href="https://www.intel.com/content/www/us/en/support/articles/000091103/processors/intel-xeon-processors.html">TDX processor support note</a> and the <a class="inline-link" href="https://docs.kernel.org/arch/x86/tdx.html">Linux TDX host guide</a>.</p>'
+    memory = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>SEAM</b><span>Secure Arbitration Mode isolates the Intel TDX module from ordinary host software. The host enters the module through SEAMCALL; the guest uses TDCALL.</span></div>',
+        '<div class="stack-row"><b>KeyIDs</b><span>TD private memory uses dedicated memory-encryption KeyIDs. A host mapping cannot simply read a private TD page as plaintext.</span></div>',
+        '<div class="stack-row"><b>Secure EPT</b><span>The module manages a TD’s private guest-physical-to-host-physical mappings. Ordinary host EPT control alone cannot authorize access to private TD pages.</span></div>',
+        '<div class="stack-row"><b>PAMT</b><span>Physical Address Metadata Table records TDX ownership and page type for protected physical pages, constraining host reuse or aliasing.</span></div>',
+        '<div class="stack-row"><b>SHARED</b><span>Shared guest pages support VMM and device communication. They are intentionally outside the TD private-memory boundary; their contents need ordinary input validation.</span></div>'
+    ]) + '</div><div class="signal" style="margin-top:20px"><strong>One useful mental trace</strong>Guest virtual address → guest page table → guest physical address → private Secure EPT mapping → protected host physical page. For a shared GPA, communication crosses back to host-controlled memory.</div>'
+    calls = table(('Caller / instruction', 'Leaf or operation', 'Role in the flow'), [
+        ('Host VMM · <code>SEAMCALL</code>', '<code>TDH.MNG.CREATE</code>', 'Create the TD root control structure (TDR).'),
+        ('Host VMM · <code>SEAMCALL</code>', '<code>TDH.MNG.INIT</code>', 'Initialize TD-wide configuration.'),
+        ('Host VMM · <code>SEAMCALL</code>', '<code>TDH.MEM.PAGE.ADD</code>', 'Add an initial private page to the TD.'),
+        ('Host VMM · <code>SEAMCALL</code>', '<code>TDH.VP.ENTER</code>', 'Enter or resume a TD virtual processor.'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.INFO</code>', 'Query TD and virtual-processor information.'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MEM.PAGE.ACCEPT</code>', 'Accept a pending private page before use.'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.VMCALL</code>', 'Request host VMM service; often called TDVMCALL.'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MR.REPORT</code>', 'Generate a local TD report; remote attestation is covered only briefly here.')
+    ]) + '<p class="source-note">SEAMCALL and TDCALL are CPU instructions; the TDH.* and TDG.* names are TDX module API leaves. TDVMCALL is the TDG.VP.VMCALL leaf, not a third instruction. Verify operands, status codes and version-specific behavior in Intel’s <a class="inline-link" href="https://cdrdv2-public.intel.com/853289/intel-tdx-module-abi-spec-348551006.pdf">TDX module ABI specification</a>.</p>'
+    flow = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>PREPARE</b><span>Firmware enables TDX and loads the module; the Linux host initializes it and exposes KVM capabilities.</span></div>',
+        '<div class="stack-row"><b>BUILD</b><span>VMM issues KVM TDX ioctls; KVM uses SEAMCALL leaves to create the TD, add initial memory, create vCPUs and finalize the initial image.</span></div>',
+        '<div class="stack-row"><b>RUN</b><span>Host uses TDH.VP.ENTER; guest code runs privately and may call TDG.MEM.PAGE.ACCEPT or TDG.VP.INFO through TDCALL.</span></div>',
+        '<div class="stack-row"><b>EXIT</b><span>TD exit returns control to the host for permitted handling. TDG.VP.VMCALL explicitly asks for a host service; a virtualization exception (#VE) can instead be handled within the guest.</span></div>'
+    ]) + '</div><p class="source-note">The <a class="inline-link" href="https://docs.kernel.org/virt/kvm/x86/intel-tdx.html">Linux KVM TDX guide</a> documents the userspace ioctl layer; it is distinct from the SEAMCALL ABI.</p>'
+    boundary = '<div class="split"><div class="panel"><h3>Private TD state</h3><p>CPU, module and memory metadata protect private guest pages and TD state from direct host access. The host still controls scheduling and supplies virtual devices.</p></div><div class="panel"><h3>Shared boundary</h3><p>Guest-shared pages, emulated I/O and VMM responses are untrusted inputs. TDX does not by itself guarantee availability or eliminate timing and microarchitectural side channels.</p></div></div>'
+    return hero + article('01 / PLATFORM SUPPORT', 'A chain of hardware and software prerequisites', 'Confirm the actual processor, firmware settings, TDX module, host KVM and guest capabilities separately.', hardware, 'hardware') + article('02 / MEMORY MODEL', 'How private pages remain private', 'SEAM, KeyIDs, Secure EPT and PAMT work together. Shared pages are an explicit exception.', memory, 'memory') + article('03 / CALL MAP', 'Separate host SEAMCALL from guest TDCALL', 'The leaf name tells you which side requested the operation and what state transition it needs.', calls, 'calls') + article('04 / LIFECYCLE', 'Build, enter, run and exit a TD', 'Keep the userspace KVM interface, module ABI and guest interface as three layers.', flow, 'flow') + article('05 / SECURITY BOUNDARY', 'What the VMM still controls', 'Read the private/shared split before placing secrets or trusting virtual devices.', boundary)
+
+
+def tdx_zh():
+    hero = page_hero('zh', 'INTEL TDX', '在 Hypervisor 之下<br><em>建立虚拟机边界</em>', '跟随 SEAM 中的 TDX 模块、私有内存地址转换，以及宿主 VMM 与 Guest Trust Domain 各自发出的调用。')
+    hardware = '<div class="detail-grid">' + ''.join([
+        detail('CPU', '核对 Xeon 具体 SKU', '宿主 TDX 支持始于部分第 4 代 Intel Xeon Scalable 处理器，并延续到部分更新的服务器平台；仅凭代际不能确定支持。'),
+        detail('固件', '初始化平台', 'BIOS/UEFI 需要启用 TDX，配置 SEAM、SEAMRR 与私有 KeyID。宿主创建 TD 前须加载兼容的 Intel TDX 模块。'),
+        detail('宿主', '检查 KVM 与 VMM', 'Linux 宿主须初始化 TDX；KVM 与 VMM 再提供用户态创建虚拟机的路径。功能还取决于内核及模块 ABI 版本。'),
+        detail('Guest', '使用 TD 感知的系统', 'TD Guest 处理私有/共享内存转换，在需要时接受页面，并以 TDCALL 请求模块服务或宿主协助。')
+    ]) + '</div><p class="source-note">先看 Intel 的 <a class="inline-link" href="https://www.intel.com/content/www/us/en/support/articles/000091103/processors/intel-xeon-processors.html">TDX 处理器支持说明</a>和 <a class="inline-link" href="https://docs.kernel.org/arch/x86/tdx.html">Linux TDX 宿主指南</a>。</p>'
+    memory = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>SEAM</b><span>Secure Arbitration Mode 把 Intel TDX 模块与普通宿主软件隔离。宿主通过 SEAMCALL 进入模块；Guest 使用 TDCALL。</span></div>',
+        '<div class="stack-row"><b>KeyID</b><span>TD 私有内存使用专用的内存加密 KeyID。宿主映射不能直接把私有 TD 页面读成明文。</span></div>',
+        '<div class="stack-row"><b>Secure EPT</b><span>模块管理 TD 私有的 Guest 物理地址到宿主物理地址映射。仅控制普通宿主 EPT 不足以授权访问私有页。</span></div>',
+        '<div class="stack-row"><b>PAMT</b><span>Physical Address Metadata Table 记录受保护物理页的 TDX 所有权和类型，限制宿主复用或别名映射。</span></div>',
+        '<div class="stack-row"><b>共享页</b><span>Guest 共享页用于 VMM 和设备通信，明确处于 TD 私有内存边界之外；其内容仍需作为不可信输入校验。</span></div>'
+    ]) + '</div><div class="signal" style="margin-top:20px"><strong>追踪一次地址访问</strong>Guest 虚拟地址 → Guest 页表 → Guest 物理地址 → 私有 Secure EPT 映射 → 受保护的宿主物理页。若 GPA 标记为共享，则通信回到宿主可控内存。</div>'
+    calls = table(('调用者 / 指令', 'Leaf 或操作', '在路径中的作用'), [
+        ('宿主 VMM · <code>SEAMCALL</code>', '<code>TDH.MNG.CREATE</code>', '创建 TD 根控制结构 TDR。'),
+        ('宿主 VMM · <code>SEAMCALL</code>', '<code>TDH.MNG.INIT</code>', '初始化 TD 级配置。'),
+        ('宿主 VMM · <code>SEAMCALL</code>', '<code>TDH.MEM.PAGE.ADD</code>', '为 TD 增加初始私有页面。'),
+        ('宿主 VMM · <code>SEAMCALL</code>', '<code>TDH.VP.ENTER</code>', '进入或恢复 TD 虚拟处理器。'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.INFO</code>', '查询 TD 与虚拟处理器信息。'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MEM.PAGE.ACCEPT</code>', '使用前接受待确认的私有页。'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.VMCALL</code>', '请求宿主 VMM 服务，常称 TDVMCALL。'),
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MR.REPORT</code>', '生成本地 TD report；这里仅简要涉及远程证明。')
+    ]) + '<p class="source-note">SEAMCALL 和 TDCALL 是 CPU 指令；TDH.* 与 TDG.* 是 TDX 模块 API 的 leaf。TDVMCALL 是 TDG.VP.VMCALL leaf，不是第三条指令。操作数、状态码和版本差异请查 Intel <a class="inline-link" href="https://cdrdv2-public.intel.com/853289/intel-tdx-module-abi-spec-348551006.pdf">TDX 模块 ABI 规范</a>。</p>'
+    flow = '<div class="stack">' + ''.join([
+        '<div class="stack-row"><b>准备</b><span>固件启用 TDX 并加载模块；Linux 宿主初始化模块，暴露 KVM 能力。</span></div>',
+        '<div class="stack-row"><b>构建</b><span>VMM 发出 KVM TDX ioctl；KVM 用 SEAMCALL leaf 创建 TD、添加初始内存和 vCPU，并完成初始镜像。</span></div>',
+        '<div class="stack-row"><b>运行</b><span>宿主用 TDH.VP.ENTER；Guest 私有执行，并可通过 TDCALL 调用 TDG.MEM.PAGE.ACCEPT 或 TDG.VP.INFO。</span></div>',
+        '<div class="stack-row"><b>退出</b><span>TD exit 把控制权交还宿主处理允许的事件。TDG.VP.VMCALL 显式请求宿主服务；虚拟化异常 #VE 则可由 Guest 内部处理。</span></div>'
+    ]) + '</div><p class="source-note"><a class="inline-link" href="https://docs.kernel.org/virt/kvm/x86/intel-tdx.html">Linux KVM TDX 指南</a>记录用户态 ioctl 层，它与 SEAMCALL ABI 不是同一层。</p>'
+    boundary = '<div class="split"><div class="panel"><h3>TD 私有状态</h3><p>CPU、模块和内存元数据阻止宿主直接访问私有 Guest 页面及 TD 状态。宿主仍控制调度，并提供虚拟设备。</p></div><div class="panel"><h3>共享边界</h3><p>Guest 共享页、模拟 I/O 与 VMM 响应都是不可信输入。TDX 本身不保证可用性，也不会消除时序和微架构侧信道。</p></div></div>'
+    return hero + article('01 / 平台支持', '硬件与软件缺一不可', '分别确认具体处理器、固件设置、TDX 模块、宿主 KVM 与 Guest 能力。', hardware, 'hardware') + article('02 / 内存模型', '私有页如何保持私有', 'SEAM、KeyID、Secure EPT 和 PAMT 协同工作；共享页是明确的例外。', memory, 'memory') + article('03 / 调用地图', '分清宿主 SEAMCALL 与 Guest TDCALL', '从 leaf 名称即可看出请求来自哪一方，以及需要哪种状态转换。', calls, 'calls') + article('04 / 生命周期', '构建、进入、运行与退出 TD', '把用户态 KVM 接口、模块 ABI 和 Guest 接口视为三个不同层次。', flow, 'flow') + article('05 / 安全边界', 'VMM 仍控制什么', '放置秘密或信任虚拟设备前，先读懂私有/共享边界。', boundary)
 
 
 def labs_en():
-    intro = page_hero('en', 'LABS & SOURCES', 'Practice the decisions<br><em>before renting hardware</em>', 'Begin with a threat model and attestation-policy exercise. Then inspect hardware support, follow a current vendor sample, and finally connect attestation to secret delivery.')
-    nohw = '<div class="route">' + ''.join([
-        route('01', 'Draw the perimeter', 'Take a secret-processing service. Mark what an SGX enclave would contain and what a TDX guest would contain. List all host-facing interfaces.', 'architecture.html#model', 'Open boundary guide'),
-        route('02', 'Write an acceptance policy', 'Specify allowed measurement, signer or guest image, debug state, TCB level, freshness window and key binding.', 'attestation.html#policy', 'Open policy guide'),
-        route('03', 'Flip one claim', 'Use the on-page simulator to reject an outdated TCB, changed image, stale challenge or unbound key. Explain which party makes the decision.', 'attestation.html#policy', 'Run interactive lab'),
-        route('04', 'Audit the blind spots', 'List shared memory, device input, denial of service, side channels and software bugs excluded from the claim.', 'architecture.html#surfaces', 'Review attack surfaces')
-    ]) + '</div><div class="signal" style="margin-top:20px"><strong>What you can claim after these exercises</strong>You can explain and test an illustrative policy. You have not generated genuine SGX or TDX evidence, verified a real quote, or established the security of any workload.</div>'
-    hw = '<div class="split"><div class="panel"><h3>SGX route</h3><p>On an authorized Linux test machine, check processor and OS support. Then use Intel’s maintained SDK sample enclave and DCAP quote-verification documentation. Simulation mode can teach calling conventions; it is not hardware attestation.</p><pre class="code">grep -w sgx /proc/cpuinfo | head -1\nls -l /dev/sgx_enclave 2>/dev/null</pre><p>Build a sample only after checking its current prerequisites and whether the processor/BIOS actually enables SGX.</p></div><div class="panel"><h3>TDX route</h3><p>Use a TD-capable host or supported confidential-VM provider. Read the Linux KVM TDX host interface and guest report API before collecting evidence. A TDREPORT is local report material, not a remotely trusted verdict by itself.</p><pre class="code">ls -l /dev/tdx-guest 2>/dev/null</pre><p>Record guest image, firmware, module and collateral versions before comparing reports or debugging failures.</p></div></div>'
-    production = '<div class="stack">' + ''.join([
-        '<div class="stack-row"><b>01 / REQUEST</b><span>The guest or enclave requests an attestation challenge and produces evidence bound to the request or session.</span></div>',
-        '<div class="stack-row"><b>02 / VERIFY</b><span>A verifier checks manufacturer endorsements, quote authenticity, TCB and owner-controlled reference values.</span></div>',
-        '<div class="stack-row"><b>03 / DECIDE</b><span>A relying party applies its own policy to the result and releases only the required secret to the bound recipient.</span></div>',
-        '<div class="stack-row"><b>04 / OPERATE</b><span>Rotate secrets, update policy/collateral, monitor revocation and re-attest at meaningful lifecycle boundaries.</span></div>'
-    ]) + '</div><p class="source-note">For an open-source reference architecture, inspect <a class="inline-link" href="https://github.com/confidential-containers/trustee">Confidential Containers Trustee</a> and its verifier, reference-value and key-broker components.</p>'
-    sources = '<div class="source-grid">' + ''.join([
-        link('https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html', 'Intel TDX documentation hub', 'Architecture, module specifications, attestation and security guidance.', 'INTEL / TDX'),
-        link('https://docs.kernel.org/virt/kvm/x86/intel-tdx.html', 'Linux KVM Intel TDX', 'Host-side KVM interfaces and feature status.', 'LINUX / TDX'),
-        link('https://docs.kernel.org/virt/coco/tdx-guest.html', 'Linux TDX guest API', 'Guest report device and userspace API; check your kernel version.', 'LINUX / TDX'),
-        link('https://docs.kernel.org/arch/x86/sgx.html', 'Linux SGX architecture', 'Enclave memory, build, runtime and driver behavior.', 'LINUX / SGX'),
-        link('https://github.com/intel/confidential-computing.sgx', 'Intel SGX SDK & DCAP', 'Maintained code and quote-generation/verification components.', 'INTEL / SGX'),
-        link('https://www.rfc-editor.org/rfc/rfc9334.html', 'RFC 9334 · RATS architecture', 'Architecture-neutral roles, evidence, verifier and relying party.', 'IETF / RATS'),
-        link('https://docs.kernel.org/security/snp-tdx-threat-model.html', 'Linux CoCo threat model', 'Untrusted-host attack surfaces for confidential VMs.', 'LINUX / SECURITY'),
-        link('https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/best-practices/trusted-domain-security-guidance-for-developers.html', 'TD developer security guidance', 'Shared memory, host interfaces and side-channel considerations.', 'INTEL / SECURITY'),
-        link('https://github.com/confidential-containers/trustee', 'Trustee · attestation and key delivery', 'Open-source KBS, verifier and reference-value components.', 'COCO / IMPLEMENTATION'),
-        link('https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/technical-documentation/tdx-security-research-and-assurance.html', 'TDX research and assurance', 'Intel’s research focus and evolving threat model.', 'INTEL / RESEARCH')
-    ]) + '</div><p class="source-note">Source review: September 30, 2026. Vendor advisories, supported processors and kernel interfaces change; check the linked upstream pages before deployment.</p>'
-    return intro + article_section('01 / NO SPECIAL HARDWARE', 'Four exercises anyone can complete', 'These teach the reasoning required for a real deployment without pretending to produce trustworthy evidence.', nohw) + article_section('02 / WHEN HARDWARE IS AVAILABLE', 'Two practical entry points', 'Use your own authorized machine or a supported provider. Do not infer support from a marketing name alone.', hw, 'hardware') + article_section('03 / SYSTEM PATH', 'From evidence to a protected workload', 'Hardware isolation is only one step. Verification, policy and key delivery complete the workflow.', production) + article_section('04 / SOURCE LIBRARY', 'Return to primary documentation', 'Start with the Linux and Intel material for the feature you are testing; use the RATS model to keep roles clear.', sources, 'sources')
+    hero = page_hero('en', 'LABS & SOURCES', 'Check the platform.<br><em>Trace the real calls.</em>', 'Short exercises for readers who already know x86 and virtualization. Hardware is useful, but source-level tracing works without an SGX or TDX machine.')
+    checks = table(('Layer', 'Check', 'Interpretation'), [
+        ('SGX CPU', '<code>grep -m1 -o "sgx" /proc/cpuinfo</code>', 'A visible flag is a lead; confirm CPUID capabilities, firmware and EPC size.'),
+        ('SGX Linux', '<code>ls -l /dev/sgx_enclave</code>', 'The enclave driver is present; permissions and a working sample still matter.'),
+        ('TDX host', '<code>dmesg | grep -i "virt/tdx"</code>', 'Kernel initialization messages help distinguish disabled firmware or a module failure; dmesg may need privilege.'),
+        ('TDX host', '<code>cat /sys/devices/faux/tdx_host/version</code>', 'Read the module version if this sysfs path exists on the running kernel.'),
+        ('TDX guest', '<code>ls -l /dev/tdx-guest</code>', 'The guest device supports TD report requests; it does not by itself prove a remote verifier accepts the TD.')
+    ]) + '<p class="source-note">Run only the commands relevant to your machine. No device node or CPU flag alone establishes end-to-end support.</p>'
+    exercises = '<div class="route">' + ''.join([
+        route('01', 'Trace an SGX enclave build', 'Read Linux SGX documentation and the Intel lifecycle guide. Sketch which step uses ECREATE, EADD, EEXTEND and EINIT, then map EENTER and AEX.', 'sgx.html#instructions', 'Review instruction map'),
+        route('02', 'Separate TDX’s three APIs', 'Read the KVM TDX userspace flow, then the module ABI. Label each operation KVM ioctl, host SEAMCALL or guest TDCALL.', 'tdx.html#calls', 'Review call map'),
+        route('03', 'Draw one private and one shared page', 'For each page, write who controls the mapping, which metadata applies, and which data the host can observe.', 'tdx.html#memory', 'Review memory model'),
+        route('04', 'Build a support matrix', 'Record exact CPU SKU, firmware revision/settings, kernel, module ABI, guest OS and VMM version. Treat unsupported or unverified entries as unknown.', 'labs.html#sources', 'Open documentation')
+    ]) + '</div>'
+    sources = '<div class="sources">' + ''.join([
+        link('https://www.intel.com/content/www/us/en/architecture-and-technology/software-guard-extensions-processors.html', 'Intel SGX processor support', 'Processor and SKU checks.'),
+        link('https://docs.kernel.org/arch/x86/sgx.html', 'Linux SGX guide', 'EPC, driver interface and enclave creation.'),
+        link('https://www.intel.com/content/www/us/en/developer/articles/technical/overview-of-an-intel-software-guard-extensions-enclave-life-cycle.html', 'Intel SGX enclave lifecycle', 'Instruction sequence and state transitions.'),
+        link('https://www.intel.com/content/dam/develop/external/us/en/documents/329298-002-629101.pdf', 'Intel SGX programming reference', 'Detailed instruction behavior.'),
+        link('https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html', 'Intel TDX documentation hub', 'Current architecture and ABI documents.'),
+        link('https://cdrdv2-public.intel.com/853289/intel-tdx-module-abi-spec-348551006.pdf', 'Intel TDX module ABI', 'SEAMCALL and TDCALL leaves.'),
+        link('https://docs.kernel.org/arch/x86/tdx.html', 'Linux TDX host guide', 'Host requirements and initialization.'),
+        link('https://docs.kernel.org/virt/kvm/x86/intel-tdx.html', 'Linux KVM TDX guide', 'VMM and KVM creation flow.'),
+        link('https://docs.kernel.org/virt/coco/tdx-guest.html', 'Linux TDX guest guide', 'Guest kernel and report device.'),
+        link('https://www.intel.com/content/www/us/en/support/articles/000091103/processors/intel-xeon-processors.html', 'Intel TDX processor support', 'Host processor families and caveats.')
+    ]) + '</div><p class="source-note">Source list reviewed 30 September 2026. ABI and processor support change; use the version that matches your hardware and software.</p>'
+    return hero + article('01 / HARDWARE', 'Verify more than a CPU flag', 'Treat each command as one piece of evidence, not a complete readiness verdict.', checks, 'hardware') + article('02 / SOURCE EXERCISES', 'Learn the mechanics without special hardware', 'Each exercise has a concrete architecture question and a primary-source answer path.', exercises, 'exercises') + article('03 / PRIMARY SOURCES', 'Read the manuals behind the diagrams', 'Intel specifications and Linux documentation take precedence over generalized summaries.', sources, 'sources')
 
 
 def labs_zh():
-    intro = page_hero('zh', '实验与资料', '先练习决策<br><em>再使用专用硬件</em>', '先做威胁模型与证明策略练习，再检查硬件支持、跟随最新厂商样例，最后把证明接到秘密交付。')
-    nohw = '<div class="route">' + ''.join([
-        route('01', '画保护边界', '选一个处理秘密的服务，标出 SGX enclave 与 TDX Guest 各应包含什么，列出所有面向宿主的接口。', 'architecture.zh.html#model', '打开边界导读'),
-        route('02', '写接受策略', '指定允许的测量值、签名者或 Guest 镜像、调试状态、TCB 级别、新鲜度窗口与密钥绑定。', 'attestation.zh.html#policy', '打开策略导读'),
-        route('03', '翻转一项声明', '用站内模拟器拒绝过旧 TCB、镜像变化、过期挑战或未绑定密钥，并解释是谁做了决定。', 'attestation.zh.html#policy', '运行交互实验'),
-        route('04', '审查盲点', '列出安全声明未覆盖的共享内存、设备输入、拒绝服务、侧信道和软件漏洞。', 'architecture.zh.html#surfaces', '审查攻击面')
-    ]) + '</div><div class="signal" style="margin-top:20px"><strong>完成后可以如何表述</strong>你能够解释并测试示意策略；还没有生成真实的 SGX 或 TDX 证据、验证真正的 quote，也没有证明某个工作负载安全。</div>'
-    hw = '<div class="split"><div class="panel"><h3>SGX 路线</h3><p>在获授权的 Linux 测试机上检查处理器和 OS 支持，再使用 Intel 维护的 SDK 示例 enclave 与 DCAP quote 验证文档。模拟模式可以学习调用接口，但不构成硬件证明。</p><pre class="code">grep -w sgx /proc/cpuinfo | head -1\nls -l /dev/sgx_enclave 2>/dev/null</pre><p>构建样例前先核对当前依赖，以及处理器和 BIOS 是否实际启用 SGX。</p></div><div class="panel"><h3>TDX 路线</h3><p>使用支持 TD 的宿主机或机密 VM 服务。收集证据前先读 Linux KVM TDX 宿主接口和 Guest report API。TDREPORT 只是本地报告材料，不是可直接远程信任的结论。</p><pre class="code">ls -l /dev/tdx-guest 2>/dev/null</pre><p>比较报告或排查失败前，记录 Guest 镜像、固件、模块和证明材料版本。</p></div></div>'
-    production = '<div class="stack">' + ''.join([
-        '<div class="stack-row"><b>01 / 请求</b><span>Guest 或 enclave 请求证明挑战，并产生绑定到请求或会话的证据。</span></div>',
-        '<div class="stack-row"><b>02 / 验证</b><span>验证者检查厂商背书、quote 真实性、TCB 和所有者维护的参考值。</span></div>',
-        '<div class="stack-row"><b>03 / 决策</b><span>依赖方对结果应用自己的策略，只向绑定的收件者释放所需秘密。</span></div>',
-        '<div class="stack-row"><b>04 / 运行</b><span>轮换秘密、更新策略和证明材料、监控撤销，并在重要生命周期边界重新证明。</span></div>'
-    ]) + '</div><p class="source-note">开源架构参考：<a class="inline-link" href="https://github.com/confidential-containers/trustee">Confidential Containers Trustee</a> 及其验证、参考值和密钥代理组件。</p>'
-    sources = '<div class="source-grid">' + ''.join([
-        link('https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html', 'Intel TDX 文档中心', '架构、模块规范、证明与安全指南。', 'INTEL / TDX'),
-        link('https://docs.kernel.org/virt/kvm/x86/intel-tdx.html', 'Linux KVM Intel TDX', '宿主 KVM 接口与功能状态。', 'LINUX / TDX'),
-        link('https://docs.kernel.org/virt/coco/tdx-guest.html', 'Linux TDX Guest API', 'Guest report 设备与用户态 API；应核对具体内核版本。', 'LINUX / TDX'),
-        link('https://docs.kernel.org/arch/x86/sgx.html', 'Linux SGX 架构', 'Enclave 内存、构建、运行时与驱动行为。', 'LINUX / SGX'),
-        link('https://github.com/intel/confidential-computing.sgx', 'Intel SGX SDK 与 DCAP', '维护中的代码及 quote 生成与验证组件。', 'INTEL / SGX'),
-        link('https://www.rfc-editor.org/rfc/rfc9334.html', 'RFC 9334 · RATS 架构', '跨平台的角色、证据、验证者与依赖方模型。', 'IETF / RATS'),
-        link('https://docs.kernel.org/security/snp-tdx-threat-model.html', 'Linux CoCo 威胁模型', '机密 VM 面对不可信宿主的攻击面。', 'LINUX / SECURITY'),
-        link('https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/best-practices/trusted-domain-security-guidance-for-developers.html', 'TD 开发者安全指南', '共享内存、宿主接口与侧信道考虑。', 'INTEL / SECURITY'),
-        link('https://github.com/confidential-containers/trustee', 'Trustee · 证明与密钥交付', '开源 KBS、验证者与参考值组件。', 'COCO / 实现'),
-        link('https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/technical-documentation/tdx-security-research-and-assurance.html', 'TDX 安全研究与保障', 'Intel 的研究重点与持续演进的威胁模型。', 'INTEL / RESEARCH')
-    ]) + '</div><p class="source-note">资料核对：2026 年 9 月 30 日。厂商公告、受支持处理器及内核接口会变化；部署前请重新核对上游页面。</p>'
-    return intro + article_section('01 / 无需专用硬件', '人人可做的四个练习', '这些练习培养真实部署所需的判断能力，不冒充可信硬件证据。', nohw) + article_section('02 / 有硬件时', '两条实践入口', '使用自有授权设备或受支持的服务；不能仅凭产品名称判断支持情况。', hw, 'hardware') + article_section('03 / 系统路径', '从证据到受保护工作负载', '硬件隔离只是一步，验证、策略与密钥交付才让工作流闭环。', production) + article_section('04 / 一手资料', '回到原始文档', '先看对应功能的 Linux 与 Intel 文档，再用 RATS 模型理清各个角色。', sources, 'sources')
+    hero = page_hero('zh', '实验与资料', '核对平台<br><em>追踪真实调用</em>', '为已有 x86 与虚拟化基础的读者准备的短练习。有硬件更好；没有 SGX/TDX 机器也能通过源码追踪学习。')
+    checks = table(('层次', '检查', '如何理解'), [
+        ('SGX CPU', '<code>grep -m1 -o "sgx" /proc/cpuinfo</code>', '出现 flag 只是线索；继续核对 CPUID 能力、固件和 EPC 大小。'),
+        ('SGX Linux', '<code>ls -l /dev/sgx_enclave</code>', '说明 enclave 驱动存在；还要检查权限并运行样例。'),
+        ('TDX 宿主', '<code>dmesg | grep -i "virt/tdx"</code>', '内核初始化日志可帮助区分固件关闭与模块故障；dmesg 可能需要权限。'),
+        ('TDX 宿主', '<code>cat /sys/devices/faux/tdx_host/version</code>', '若当前内核存在该 sysfs 路径，可读取模块版本。'),
+        ('TDX Guest', '<code>ls -l /dev/tdx-guest</code>', 'Guest 设备支持请求 TD report；它本身不证明远端验证者接受该 TD。')
+    ]) + '<p class="source-note">只在适用机器上运行相应命令。单个设备节点或 CPU flag 都不足以证明端到端可用。</p>'
+    exercises = '<div class="route">' + ''.join([
+        route('01', '追踪 SGX enclave 构建', '阅读 Linux SGX 文档和 Intel 生命周期导读，标出 ECREATE、EADD、EEXTEND、EINIT 对应步骤，再定位 EENTER 与 AEX。', 'sgx.zh.html#instructions', '查看指令地图'),
+        route('02', '分清 TDX 的三层 API', '先读 KVM TDX 用户态流程，再读模块 ABI。把每个操作标成 KVM ioctl、宿主 SEAMCALL 或 Guest TDCALL。', 'tdx.zh.html#calls', '查看调用地图'),
+        route('03', '各画一张私有页与共享页', '分别写出谁控制映射、有哪些元数据、宿主能观察到什么。', 'tdx.zh.html#memory', '查看内存模型'),
+        route('04', '制作支持矩阵', '记录准确 CPU SKU、固件版本与设置、内核、模块 ABI、Guest OS 与 VMM 版本。未验证的格子标为未知。', 'labs.zh.html#sources', '打开文档')
+    ]) + '</div>'
+    sources = '<div class="sources">' + ''.join([
+        link('https://www.intel.com/content/www/us/en/architecture-and-technology/software-guard-extensions-processors.html', 'Intel SGX 处理器支持', '检查处理器与 SKU。'),
+        link('https://docs.kernel.org/arch/x86/sgx.html', 'Linux SGX 指南', 'EPC、驱动接口与 enclave 创建。'),
+        link('https://www.intel.com/content/www/us/en/developer/articles/technical/overview-of-an-intel-software-guard-extensions-enclave-life-cycle.html', 'Intel SGX enclave 生命周期', '指令顺序与状态转换。'),
+        link('https://www.intel.com/content/dam/develop/external/us/en/documents/329298-002-629101.pdf', 'Intel SGX 编程参考', '指令行为细节。'),
+        link('https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html', 'Intel TDX 文档中心', '最新架构与 ABI 文档。'),
+        link('https://cdrdv2-public.intel.com/853289/intel-tdx-module-abi-spec-348551006.pdf', 'Intel TDX 模块 ABI', 'SEAMCALL 与 TDCALL leaf。'),
+        link('https://docs.kernel.org/arch/x86/tdx.html', 'Linux TDX 宿主指南', '宿主前提与初始化。'),
+        link('https://docs.kernel.org/virt/kvm/x86/intel-tdx.html', 'Linux KVM TDX 指南', 'VMM 与 KVM 创建流程。'),
+        link('https://docs.kernel.org/virt/coco/tdx-guest.html', 'Linux TDX Guest 指南', 'Guest 内核与 report 设备。'),
+        link('https://www.intel.com/content/www/us/en/support/articles/000091103/processors/intel-xeon-processors.html', 'Intel TDX 处理器支持', '宿主处理器家族及限制。')
+    ]) + '</div><p class="source-note">资料清单复核于 2026 年 9 月 30 日。ABI 与处理器支持会变化，应以匹配当前硬件和软件的版本为准。</p>'
+    return hero + article('01 / 硬件', '不只看 CPU flag', '每条命令只是一份证据，不是完整的可用性结论。', checks, 'hardware') + article('02 / 源码练习', '无需专用硬件也能学机制', '每个练习都有具体架构问题，以及从一手资料寻找答案的路径。', exercises, 'exercises') + article('03 / 一手资料', '回到图示背后的手册', '具体细节以 Intel 规范和 Linux 文档为准。', sources, 'sources')
 
 
 if __name__ == '__main__':
-    content = {
-        'en': (index_en, architecture_en, attestation_en, labs_en),
-        'zh': (index_zh, architecture_zh, attestation_zh, labs_zh),
-    }
-    for lang in ('en', 'zh'):
-        for name, builder in zip(PAGES, content[lang]):
-            target = ROOT / f'{name}{".zh" if lang == "zh" else ""}.html'
-            target.write_text(shell(lang, name, builder()), encoding='utf-8')
-            print(target.name)
+    for name in PAGES:
+        for language in ('en', 'zh'):
+            body = globals()[f'{name}_{language}']()
+            filename = f'{name}{".zh" if language == "zh" else ""}.html'
+            (ROOT / filename).write_text(shell(language, name, body), encoding='utf-8')
+            print(filename)
