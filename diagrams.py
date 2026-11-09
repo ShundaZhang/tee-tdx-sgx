@@ -1,6 +1,9 @@
 """Bilingual architecture diagrams for SGX and TDX."""
 from diagram_core import tr, node, arrow, frame, flow
 
+TDX_CONNECT_ARCH = 'https://cdrdv2.intel.com/v1/dl/getContent/773614'
+TDISP_SPEC = 'https://pcisig.com/PCI%20Express/ECN/Base/TEEDeviceInterfaceSecurityProtocol'
+
 def sgx_memory(lang):
     t = lambda en, zh: tr(lang, en, zh)
     host = '<div class="viz-zone outside"><span class="viz-zone-label">' + t('UNTRUSTED OS / HOST PROCESS', '不可信 OS / 宿主进程') + '</span>'
@@ -46,6 +49,47 @@ def tdx_calls(lang):
     body += '<div class="viz-lane"><span class="viz-lane-label">' + t('Guest requests module services', 'Guest 请求模块服务') + '</span>' + flow([node('Guest TD', tone='protected'), arrow('TDCALL'), node('TDG.*', 'TDG.VP.INFO / TDG.MEM.PAGE.ACCEPT', 'neutral')]) + '</div>'
     body += '<div class="viz-lane"><span class="viz-lane-label">' + t('Guest asks the host for assistance', 'Guest 请求宿主协助') + '</span>' + flow([node('Guest TD', tone='protected'), arrow('TDCALL'), node('TDG.VP.VMCALL', t('Module mediates a TD exit', '模块介导 TD 退出'), 'neutral'), arrow(t('TD exit', 'TD 退出')), node('VMM', t('Permitted service handling', '处理允许的服务请求'), 'outside')]) + '</div>'
     return frame(lang, 'tdx-calls-diagram', t('Who calls whom in TDX', 'TDX 中谁调用谁'), body, t('TDVMCALL names the TDG.VP.VMCALL leaf of TDCALL. It is not a separate CPU instruction. The diagram shows request directions; return and re-entry paths are omitted.', 'TDVMCALL 指 TDCALL 的 TDG.VP.VMCALL leaf，不是独立 CPU 指令。图中标出请求方向，省略返回和重新进入路径。'), 'https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html', 'Intel TDX ABI')
+
+
+def tdx_connect_paths(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    control = '<div class="viz-lane"><span class="viz-lane-label">' + t('Control plane', '控制面') + '</span>'
+    control += flow([
+        node(t('TDX module (TSM)', 'TDX 模块（TSM）'), t('Manages trusted assignment', '管理可信设备分配'), 'protected'),
+        arrow(t('SPDM session over PCIe DOE', '经 PCIe DOE 传输的 SPDM 会话')),
+        node(t('Device security manager (DSM)', '设备安全管理器（DSM）'), t('Enforces the TDI lifecycle', '执行 TDI 状态机'), 'protected'),
+    ]) + '</div>'
+    data = '<div class="viz-lane"><span class="viz-lane-label">' + t('Data plane · inbound DMA example', '数据面 · 设备发起 DMA 的示例') + '</span>'
+    data += flow([
+        node(t('Bound TDI', '已绑定的 TDI'), t('For example, a device VF', '例如设备的一个 VF'), 'protected'),
+        arrow('Selective IDE'),
+        node(t('PCIe Root Port', 'PCIe 根端口'), t('Checks and decrypts traffic', '校验并解密事务')),
+        arrow(t('TEE I/O request', '可信 I/O 请求')),
+        node('Intel VT-d / IOMMU', t('Enforces trusted DMA mappings', '执行可信 DMA 映射检查')),
+        arrow(t('Authorized DMA', '已授权 DMA')),
+        node(t('TD private memory', 'TD 私有内存'), t('Only permitted pages', '仅限获准页面'), 'protected'),
+    ]) + '</div>'
+    return frame(lang, 'tdx-connect-paths', t('Control messages and device traffic take different paths', '控制消息与设备数据走不同路径'),
+                 control + data, t('The VMM can relay DOE messages. The TSM and DSM are the endpoints of the secure session.',
+                                   'VMM 可以转发 DOE 消息，安全会话的端点是 TSM 和 DSM。'), TDX_CONNECT_ARCH, 'Intel TDX Connect Architecture')
+
+
+def tdisp_states(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    body = flow([
+        node('CONFIG_UNLOCKED', t('Host prepares the function', '宿主准备设备功能'), 'neutral'),
+        arrow('LOCK'),
+        node('CONFIG_LOCKED', t('Fetch and evaluate the locked interface report', '获取并评估锁定后的接口报告'), 'neutral'),
+        arrow('START'),
+        node('RUN', t('Trusted I/O enabled', '启用可信 I/O'), 'protected'),
+    ])
+    body += '<div class="viz-strip">' + t(
+        'A security violation can move a locked or running TDI to ERROR. STOP_INTERFACE_REQUEST returns a locked, running or failed TDI to CONFIG_UNLOCKED.',
+        '锁定或运行中的 TDI 遇到安全违规时可进入 ERROR。STOP_INTERFACE_REQUEST 可将锁定、运行或出错的 TDI 恢复到 CONFIG_UNLOCKED。',
+    ) + '</div>'
+    return frame(lang, 'tdisp-states', t('TDISP interface state machine', 'TDISP 接口状态机'), body,
+                 t('The normal path locks configuration before the TD checks the report and authorizes start.',
+                   '正常流程先锁定配置，再由 TD 核对接口报告并授权启动。'), TDISP_SPEC, 'PCI-SIG TDISP')
 
 
 def diagram(name, lang):

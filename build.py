@@ -1,6 +1,7 @@
 """Build the static bilingual TEE / TDX / SGX atlas (stdlib only)."""
 from pathlib import Path
-from diagrams import diagram
+from diagram_core import tr
+from diagrams import TDISP_SPEC, TDX_CONNECT_ARCH, diagram
 
 ROOT = Path(__file__).parent
 PAGES = ('index', 'sgx', 'tdx', 'labs')
@@ -54,10 +55,14 @@ def section(label, title, intro, content, tone='', section_id=''):
     return f'<section class="section {tone}"{ident}><div class="wrap"><div class="section-head"><div><span class="kicker">{label}</span><h2>{title}</h2></div><p>{intro}</p></div>{content}</div></section>'
 
 
-def page_hero(lang, crumb, title, intro):
+def page_hero(lang, crumb, title, intro, action=None):
     home = '总览' if lang == 'zh' else 'OVERVIEW'
     suffix = '.zh.html' if lang == 'zh' else '.html'
-    return f'<section class="page-hero"><div class="wrap"><div class="crumb"><a href="index{suffix}">{home}</a> / {crumb}</div><h1>{title}</h1><p>{intro}</p></div></section>'
+    buttons = ''
+    if action:
+        href, label = action
+        buttons = f'<div class="buttons"><a class="button ghost" href="{href}">{label} ↓</a></div>'
+    return f'<section class="page-hero"><div class="wrap"><div class="crumb"><a href="index{suffix}">{home}</a> / {crumb}</div><h1>{title}</h1><p>{intro}</p>{buttons}</div></section>'
 
 
 def article(label, title, lead, content, ident=''):
@@ -193,8 +198,70 @@ def sgx_zh():
     return hero + article('01 / 平台支持', '先确认硬件与固件', '“这个 CPU 家族支持 SGX”并不证明眼前的机器提供可用的 enclave 功能。', hardware, 'hardware') + article('02 / 内存模型', '记住四个关键结构', '跟随一个页面从普通内存进入 EPC，并经过 CPU 元数据检查。', diagram('sgx_memory', 'zh') + memory, 'memory') + article('03 / 指令地图', '按 ENCLS 与 ENCLU 读生命周期', '先按执行者和状态变化分组，再去记操作码。', instructions, 'instructions') + article('04 / 执行路径', '从创建到中断的一次运行', 'AEX 与恢复是理解中断和不可信调度的关键。', diagram('sgx_execution', 'zh') + flow, 'flow') + article('05 / 安全边界', '隔离仍留给软件的问题', 'Enclave 阻止页面被直接读取；宿主接口和侧信道行为仍需单独设计。', boundary)
 
 
+def tdx_connect(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    protocols = table(
+        t(('Layer', 'What it does', 'Where it runs'), ('层次', '解决什么问题', '在哪里执行')),
+        [
+            ('PCIe DOE', t('Data Object Exchange provides a mailbox for control messages.', 'Data Object Exchange 为控制消息提供邮箱。'),
+             t('PCIe configuration space. The VMM can relay mailbox traffic.', '位于 PCIe 配置空间。VMM 可转发邮箱消息。')),
+            ('DMTF SPDM', t('Authenticates the device, retrieves measurements and establishes a secure session for management messages.', '认证设备身份、获取度量，并建立管理消息的安全会话。'),
+             t('Between the TEE Security Manager (TSM) and the device security manager (DSM).', '会话端点是 TEE 安全管理器（TSM）和设备安全管理器（DSM）。')),
+            ('PCI-SIG TDISP', t('Locks, reports, starts and stops an individual TEE Device Interface (TDI).', '锁定、查询、启动和停止单个 TEE 设备接口（TDI）。'),
+             t('TSM and DSM exchange TDISP messages inside the SPDM secure session.', 'TSM 和 DSM 在 SPDM 安全会话内交换 TDISP 消息。')),
+            ('PCIe IDE / IDE_KM', t('Selective IDE protects the confidentiality and integrity of PCIe transaction packets and guards against replay. IDE_KM provisions stream keys.', 'Selective IDE 保护 PCIe 事务包的机密性和完整性，并防止重放。IDE_KM 配置流密钥。'),
+             t('IDE protects traffic between the Root Port and the endpoint. IDE_KM messages use the SPDM session.', 'IDE 保护根端口与设备端点之间的流量。IDE_KM 消息通过 SPDM 会话传输。')),
+            ('Intel VT-d / IOMMU', t('Translates and restricts trusted DMA to the pages authorized for the assigned TDI.', '转换可信 DMA 地址，并将访问限制在该 TDI 获准访问的页面。'),
+             t('The TDX module controls trusted mappings. The host manages ordinary shared I/O mappings.', 'TDX 模块控制可信映射。宿主管理普通共享 I/O 映射。')),
+        ],
+    )
+    lifecycle = '<ol>' + ''.join(f'<li>{step}</li>' for step in [
+        t('<b>Connect the physical device.</b> Establish the SPDM session and set up a Selective IDE stream. Device identity and firmware measurements are inputs to the TD’s trust decision.',
+          '<b>连接物理设备。</b>建立 SPDM 会话并配置 Selective IDE 流。设备身份和固件度量供 TD 作信任判断。'),
+        t('<b>Lock and inspect the function.</b> <code>LOCK_INTERFACE_REQUEST</code> freezes security-relevant configuration. <code>GET_DEVICE_INTERFACE_REPORT</code> retrieves the locked interface configuration, including its MMIO ranges. The TD evaluates that report and the SPDM evidence against its policy.',
+          '<b>锁定并检查设备功能。</b><code>LOCK_INTERFACE_REQUEST</code> 锁定与安全相关的配置。<code>GET_DEVICE_INTERFACE_REPORT</code> 获取锁定后的接口配置，包括 MMIO 范围。TD 按自己的策略检查接口报告和 SPDM 证据。'),
+        t('<b>Authorize trusted I/O.</b> The TD accepts the TDI and the appropriate mappings. <code>START_INTERFACE_REQUEST</code> puts the interface in <code>RUN</code>. The device can DMA to permitted TD private pages, and the TD can access the assigned device registers through trusted MMIO.',
+          '<b>授权可信 I/O。</b>TD 接受 TDI 及相应映射后，<code>START_INTERFACE_REQUEST</code> 使接口进入 <code>RUN</code>。设备可 DMA 到获准的 TD 私有页，TD 可通过可信 MMIO 访问分配给它的设备寄存器。'),
+        t('<b>Stop and unbind.</b> <code>STOP_INTERFACE_REQUEST</code> quiesces the interface and drains outstanding traffic. The platform revokes trusted MMIO and DMA access and invalidates cached I/O translations before reusing resources.',
+          '<b>停止并解绑。</b><code>STOP_INTERFACE_REQUEST</code> 让接口停止工作并处理在途事务。平台撤销可信 MMIO 和 DMA 访问，并使缓存的 I/O 地址转换失效，再回收资源。'),
+    ]) + '</ol>'
+    example = '<div class="split">' + ''.join([
+        '<div class="panel"><h3>' + t('Example · assign an accelerator VF', '示例 · 分配一个加速器 VF') + '</h3><p>' + t(
+            'A capable SR-IOV device can expose several Virtual Functions (VFs). Each assigned TDI belongs exclusively to one TD at a time. After accepting its VF, the TD can submit work via MMIO, and the VF can DMA into authorized private buffers. The device’s firmware and isolation between functions now matter to the TD’s security.',
+            '支持 SR-IOV 的设备可以提供多个虚拟功能（VF）。同一时刻，一个已分配的 TDI 只属于一个 TD。TD 接受自己的 VF 后，可通过 MMIO 提交任务，由 VF 对获准的私有缓冲区执行 DMA。设备固件与功能之间的隔离由此进入 TD 的安全边界。',
+        ) + '</p></div>',
+        '<div class="panel"><h3>' + t('Check the entire stack', '核对整套软硬件') + '</h3><p>' + t(
+            'Check the exact server SKU and firmware, Root Port and trusted VT-d support, the TDX module, the host kernel and VMM, guest drivers, and endpoint firmware with DOE, SPDM, Selective IDE and TDISP. The VMM can still withhold or revoke a device, so availability remains under host control.',
+            '逐项核对服务器 SKU 与固件、根端口与可信 VT-d、TDX 模块、宿主内核与 VMM、Guest 驱动，以及设备端是否支持 DOE、SPDM、Selective IDE 和 TDISP。VMM 仍可拒绝分配或撤下设备，设备可用性由宿主控制。',
+        ) + '</p></div>',
+    ]) + '</div>'
+    status = '<h3>' + t('Public specification status · November 2026', '公开规范进展 · 2026 年 11 月') + '</h3><p>' + t(
+        'Intel lists TEE I/O as a TDX 2.0 extension. Its September 2026 Connect ABI (2.1 V0.66) is a community review draft. In that draft, the VMM calls <code>TDH.TDI.BIND</code> via SEAMCALL, while the guest uses TDCALL leaves such as <code>TDG.TDI.RD</code> to retrieve evidence hashes and <code>TDG.TDI.START</code> to authorize the same bind instance. GHCI 2.0 describes the guest–VMM message layer. These interfaces are versioned, so check the ABI for the target stack.',
+        'Intel 将 TEE I/O 列为 TDX 2.0 扩展。2026 年 9 月发布的 Connect ABI（2.1 V0.66）是社区评审稿。在该稿中，VMM 通过 SEAMCALL 调用 <code>TDH.TDI.BIND</code>，Guest 通过 TDCALL 使用 <code>TDG.TDI.RD</code> 读取证据摘要，再用 <code>TDG.TDI.START</code> 授权同一次绑定。GHCI 2.0 描述 Guest 与 VMM 的消息接口。接口随版本演进，部署时以目标平台 ABI 为准。',
+    ) + '</p><p>' + t(
+        'PCI-SIG also published an Extended TEE (XT) ECN for PCIe 6.3 that adds rules for IDE and Address Translation Services (ATS). Check XT separately from baseline TDISP support.',
+        'PCI-SIG 还为 PCIe 6.3 发布了 Extended TEE（XT）ECN，增加了与 IDE 和地址转换服务（ATS）相关的规则。XT 支持需要在基础 TDISP 支持之外单独核对。',
+    ) + '</p>'
+    sources = '<div class="source-grid">' + ''.join([
+        link(TDX_CONNECT_ARCH, t('Intel TDX Connect architecture', 'Intel TDX Connect 架构规范'), t('TEE I/O trust model, hardware and lifecycle', 'TEE I/O 信任模型、硬件与生命周期')),
+        link(TDISP_SPEC, t('PCI-SIG TDISP', 'PCI-SIG TDISP'), t('Trusted device assignment and the TDI lifecycle', '可信设备分配与 TDI 生命周期')),
+        link('https://pcisig.com/PCI%20Express/ECN/Base/IntegrityandDataEncryption', t('PCI-SIG PCIe IDE', 'PCI-SIG PCIe IDE'), t('Protection for PCIe transaction packets', 'PCIe 事务包保护')),
+        link('https://www.dmtf.org/standards/spdm', t('DMTF SPDM', 'DMTF SPDM 标准'), t('Device authentication, measurements and secure messaging', '设备认证、度量和安全消息')),
+        link('https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/documentation.html', t('Intel TDX documentation index', 'Intel TDX 文档索引'), t('Connect ABI review draft, GHCI 2.0 and device guide', 'Connect ABI 评审稿、GHCI 2.0 与设备指南')),
+        link('https://cdrdv2.intel.com/v1/dl/getContent/858625', t('Intel TDX Connect ABI review draft', 'Intel TDX Connect ABI 评审稿'), t('TDH and TDG leaves in revision 2.1 V0.66', '2.1 V0.66 中的 TDH 和 TDG leaf')),
+        link('https://cdrdv2.intel.com/v1/dl/getContent/858627', t('Intel GHCI 2.0', 'Intel GHCI 2.0'), t('Guest–VMM messages for trusted device assignment', '可信设备分配的 Guest 与 VMM 消息')),
+        link('https://pcisig.com/PCIExpress/ECN/Base/TDISPeXtendedTEEExtensions', t('PCI-SIG Extended TEE (XT) ECN', 'PCI-SIG Extended TEE（XT）ECN'), t('PCIe 6.3 extensions to IDE, ATS and TDISP', '对 PCIe 6.3 的 IDE、ATS 与 TDISP 扩展')),
+    ]) + '</div>'
+    return article(t('06 / TRUSTED DEVICE I/O', '06 / 可信设备 I/O'),
+                   t('TDX Connect and TDISP', 'TDX Connect 与 TDISP'),
+                   t('Base TDX protects the VM’s private CPU and memory state. Conventional I/O often uses shared buffers, with software copying or encrypting sensitive data as needed. TDX Connect extends the TD’s trust boundary to a specifically accepted PCIe device function and lets it access authorized private buffers directly.',
+                     '基础 TDX 保护虚拟机的私有 CPU 状态与内存。普通 I/O 常通过共享缓冲区中转，软件按需复制或加密敏感数据。TDX Connect 将 TD 的信任边界扩展到明确接受的 PCIe 设备功能，使其能直接访问获准的私有缓冲区。'),
+                   diagram('tdx_connect_paths', lang) + protocols + diagram('tdisp_states', lang) + lifecycle + example + status + sources,
+                   'tdx-connect')
+
+
 def tdx_en():
-    hero = page_hero('en', 'INTEL TDX', 'A VM boundary enforced<br><em>below the hypervisor</em>', 'Follow the TDX module in SEAM, private memory translation, and the distinct calls made by a host VMM and a guest Trust Domain.')
+    hero = page_hero('en', 'INTEL TDX', 'A VM boundary enforced<br><em>below the hypervisor</em>', 'Follow the TDX module in SEAM, private memory translation, and the distinct calls made by a host VMM and a guest Trust Domain.', action=('#tdx-connect', 'TDX Connect and trusted I/O'))
     hardware = '<div class="detail-grid">' + ''.join([
         detail('CPU', 'Check the exact Xeon SKU', 'TDX host support begins with selected 4th Gen Intel Xeon Scalable processors and continues on selected later server platforms. Generation alone is not a support guarantee.'),
         detail('FIRMWARE', 'Initialize the platform', 'BIOS/UEFI must enable TDX and configure SEAM, SEAMRR and private KeyIDs. A compatible Intel TDX module must be loaded before the host can create TDs.'),
@@ -225,11 +292,11 @@ def tdx_en():
         '<div class="stack-row"><b>EXIT</b><span>TD exit returns control to the host for permitted handling. TDG.VP.VMCALL explicitly asks for a host service; a virtualization exception (#VE) can instead be handled within the guest.</span></div>'
     ]) + '</div><p class="source-note">The <a class="inline-link" href="https://docs.kernel.org/virt/kvm/x86/intel-tdx.html">Linux KVM TDX guide</a> documents the userspace ioctl layer; it is distinct from the SEAMCALL ABI.</p>'
     boundary = '<div class="split"><div class="panel"><h3>Private TD state</h3><p>CPU, module and memory metadata protect private guest pages and TD state from direct host access. The host still controls scheduling and supplies virtual devices.</p></div><div class="panel"><h3>Shared boundary</h3><p>Guest-shared pages, emulated I/O and VMM responses are untrusted inputs. TDX does not by itself guarantee availability or eliminate timing and microarchitectural side channels.</p></div></div>'
-    return hero + article('01 / PLATFORM SUPPORT', 'A chain of hardware and software prerequisites', 'Confirm the actual processor, firmware settings, TDX module, host KVM and guest capabilities separately.', hardware, 'hardware') + article('02 / MEMORY MODEL', 'How private pages remain private', 'SEAM, KeyIDs, Secure EPT and PAMT work together. Shared pages are an explicit exception.', diagram('tdx_memory', 'en') + memory, 'memory') + article('03 / CALL MAP', 'Separate host SEAMCALL from guest TDCALL', 'The leaf name tells you which side requested the operation and what state transition it needs.', diagram('tdx_calls', 'en') + calls, 'calls') + article('04 / LIFECYCLE', 'Build, enter, run and exit a TD', 'Keep the userspace KVM interface, module ABI and guest interface as three layers.', flow, 'flow') + article('05 / SECURITY BOUNDARY', 'What the VMM still controls', 'Read the private/shared split before placing secrets or trusting virtual devices.', boundary)
+    return hero + article('01 / PLATFORM SUPPORT', 'A chain of hardware and software prerequisites', 'Confirm the actual processor, firmware settings, TDX module, host KVM and guest capabilities separately.', hardware, 'hardware') + article('02 / MEMORY MODEL', 'How private pages remain private', 'SEAM, KeyIDs, Secure EPT and PAMT work together. Shared pages are an explicit exception.', diagram('tdx_memory', 'en') + memory, 'memory') + article('03 / CALL MAP', 'Separate host SEAMCALL from guest TDCALL', 'The leaf name tells you which side requested the operation and what state transition it needs.', diagram('tdx_calls', 'en') + calls, 'calls') + article('04 / LIFECYCLE', 'Build, enter, run and exit a TD', 'Keep the userspace KVM interface, module ABI and guest interface as three layers.', flow, 'flow') + article('05 / SECURITY BOUNDARY', 'What the VMM still controls', 'Read the private/shared split before placing secrets or trusting virtual devices.', boundary) + tdx_connect('en')
 
 
 def tdx_zh():
-    hero = page_hero('zh', 'INTEL TDX', '在 Hypervisor 之下<br><em>建立虚拟机边界</em>', '跟随 SEAM 中的 TDX 模块、私有内存地址转换，以及宿主 VMM 与 Guest Trust Domain 各自发出的调用。')
+    hero = page_hero('zh', 'INTEL TDX', '在 Hypervisor 之下<br><em>建立虚拟机边界</em>', '跟随 SEAM 中的 TDX 模块、私有内存地址转换，以及宿主 VMM 与 Guest Trust Domain 各自发出的调用。', action=('#tdx-connect', 'TDX Connect 与可信 I/O'))
     hardware = '<div class="detail-grid">' + ''.join([
         detail('CPU', '核对 Xeon 具体 SKU', '宿主 TDX 支持始于部分第 4 代 Intel Xeon Scalable 处理器，并延续到部分更新的服务器平台；仅凭代际不能确定支持。'),
         detail('固件', '初始化平台', 'BIOS/UEFI 需要启用 TDX，配置 SEAM、SEAMRR 与私有 KeyID。宿主创建 TD 前须加载兼容的 Intel TDX 模块。'),
@@ -260,7 +327,7 @@ def tdx_zh():
         '<div class="stack-row"><b>退出</b><span>TD exit 把控制权交还宿主处理允许的事件。TDG.VP.VMCALL 显式请求宿主服务；虚拟化异常 #VE 则可由 Guest 内部处理。</span></div>'
     ]) + '</div><p class="source-note"><a class="inline-link" href="https://docs.kernel.org/virt/kvm/x86/intel-tdx.html">Linux KVM TDX 指南</a>记录用户态 ioctl 层，它与 SEAMCALL ABI 不是同一层。</p>'
     boundary = '<div class="split"><div class="panel"><h3>TD 私有状态</h3><p>CPU、模块和内存元数据阻止宿主直接访问私有 Guest 页面及 TD 状态。宿主仍控制调度，并提供虚拟设备。</p></div><div class="panel"><h3>共享边界</h3><p>Guest 共享页、模拟 I/O 与 VMM 响应都是不可信输入。TDX 本身不保证可用性，也不会消除时序和微架构侧信道。</p></div></div>'
-    return hero + article('01 / 平台支持', '硬件与软件缺一不可', '分别确认具体处理器、固件设置、TDX 模块、宿主 KVM 与 Guest 能力。', hardware, 'hardware') + article('02 / 内存模型', '私有页如何保持私有', 'SEAM、KeyID、Secure EPT 和 PAMT 协同工作；共享页是明确的例外。', diagram('tdx_memory', 'zh') + memory, 'memory') + article('03 / 调用地图', '分清宿主 SEAMCALL 与 Guest TDCALL', '从 leaf 名称即可看出请求来自哪一方，以及需要哪种状态转换。', diagram('tdx_calls', 'zh') + calls, 'calls') + article('04 / 生命周期', '构建、进入、运行与退出 TD', '把用户态 KVM 接口、模块 ABI 和 Guest 接口视为三个不同层次。', flow, 'flow') + article('05 / 安全边界', 'VMM 仍控制什么', '放置秘密或信任虚拟设备前，先读懂私有/共享边界。', boundary)
+    return hero + article('01 / 平台支持', '硬件与软件缺一不可', '分别确认具体处理器、固件设置、TDX 模块、宿主 KVM 与 Guest 能力。', hardware, 'hardware') + article('02 / 内存模型', '私有页如何保持私有', 'SEAM、KeyID、Secure EPT 和 PAMT 协同工作；共享页是明确的例外。', diagram('tdx_memory', 'zh') + memory, 'memory') + article('03 / 调用地图', '分清宿主 SEAMCALL 与 Guest TDCALL', '从 leaf 名称即可看出请求来自哪一方，以及需要哪种状态转换。', diagram('tdx_calls', 'zh') + calls, 'calls') + article('04 / 生命周期', '构建、进入、运行与退出 TD', '把用户态 KVM 接口、模块 ABI 和 Guest 接口视为三个不同层次。', flow, 'flow') + article('05 / 安全边界', 'VMM 仍控制什么', '放置秘密或信任虚拟设备前，先读懂私有/共享边界。', boundary) + tdx_connect('zh')
 
 
 def labs_en():
