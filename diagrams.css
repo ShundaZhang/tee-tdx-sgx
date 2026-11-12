@@ -1,4 +1,40 @@
 /* Native HTML figures: readable without JavaScript or remote renderers. */
+.tdx-contents {
+  background: #eef5f3;
+  border-bottom: 1px solid #b9cdca;
+}
+.tdx-contents ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-block: 0;
+  padding: 16px 0;
+  list-style: none;
+}
+.tdx-contents a {
+  color: #245f55;
+  font-size: 14px;
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+.tdx-subhead {
+  margin-top: 38px;
+  scroll-margin-top: 110px;
+}
+.tdx-sources { margin-top: 20px; }
+.intel-figure-image {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+.intel-figure-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #d4dfde;
+  background: #fff;
+}
 .knowledge-viz{scroll-margin-top:110px;--v-ink:#22374a;--v-muted:#4e6472;--v-line:#bbcbd3;--v-accent:#21776d;margin:30px 0 35px;padding:26px;border:1px solid #b9cdca;border-radius:16px;background:#f9fcfb;color:var(--v-ink);overflow:hidden}
 .viz-heading{margin-bottom:24px}.viz-heading>span{display:block;font:600 10px/1.5 ui-monospace,monospace;letter-spacing:.13em;color:var(--v-accent);margin-bottom:8px}.viz-heading h3{font-size:21px;line-height:1.35;letter-spacing:-.02em;margin:0;color:var(--v-ink)}
 .knowledge-viz strong{font-size:14px;line-height:1.5}.knowledge-viz small{display:block;font-size:12px;line-height:1.65;color:var(--v-muted);margin-top:5px;overflow-wrap:anywhere}

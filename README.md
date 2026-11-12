@@ -2,9 +2,9 @@
 
 A bilingual learning site focused on Intel SGX and TDX principles, hardware requirements, memory structures, SGX instructions, and TDX module calls. It assumes familiarity with x86 and virtualization. The English edition is the default; visitors can switch to Chinese, and the preference is shared with the other ShundaZhang sites on the same GitHub Pages origin.
 
-The site is static HTML and CSS with a small language-selection script. Run `python3 build.py` to rebuild the eight pages. Remote attestation is summarized only briefly; its protocols and validation belong in a separate study.
+The site is static HTML and CSS with a small language-selection script. Run `python3 build.py` to rebuild the eight pages. The TDX chapter covers module startup, TD measurement, trusted I/O, Service TD binding, DCAP remote attestation, and live migration.
 
-Published at <https://shundazhang.github.io/tee-tdx-sgx/>. Primary documentation is linked on the Labs & sources page. Content last checked on September 30, 2026.
+Published at <https://shundazhang.github.io/tee-tdx-sgx/>. Primary documentation is linked from each TDX topic and the Labs & sources page.
 
 ## Visual guides
 
@@ -12,7 +12,10 @@ Bilingual architecture and message-flow figures sit next to the corresponding
 explanations. They use semantic HTML and local CSS, with captions and primary
 source links. Figures remain readable without JavaScript or a diagram CDN.
 On small screens, flows stack vertically; sequence diagrams preserve their
-three lifelines in a keyboard-focusable horizontal scroll region.
+three lifelines in a keyboard-focusable horizontal scroll region. Intel figure
+excerpts retain their original labels and link to the source figure and PDF
+page. These assets are credited to Intel Corporation in their captions and
+PNG metadata. Their document references are in `intel_figures.py`.
 
 Edit `diagrams.py` for content, `diagram_core.py` for figure primitives, and
 `diagrams.css` for presentation, then rebuild with `python3 -B build.py`.

@@ -1,7 +1,8 @@
 """Build the static bilingual TEE / TDX / SGX atlas (stdlib only)."""
 from pathlib import Path
-from diagram_core import tr
+from diagram_core import arrow, flow as diagram_flow, frame, node, tr
 from diagrams import TDISP_SPEC, TDX_CONNECT_ARCH, diagram
+from intel_figures import BASE, MIGRATION, intel_figure
 
 ROOT = Path(__file__).parent
 PAGES = ('index', 'sgx', 'tdx', 'labs')
@@ -55,14 +56,10 @@ def section(label, title, intro, content, tone='', section_id=''):
     return f'<section class="section {tone}"{ident}><div class="wrap"><div class="section-head"><div><span class="kicker">{label}</span><h2>{title}</h2></div><p>{intro}</p></div>{content}</div></section>'
 
 
-def page_hero(lang, crumb, title, intro, action=None):
+def page_hero(lang, crumb, title, intro):
     home = '总览' if lang == 'zh' else 'OVERVIEW'
     suffix = '.zh.html' if lang == 'zh' else '.html'
-    buttons = ''
-    if action:
-        href, label = action
-        buttons = f'<div class="buttons"><a class="button ghost" href="{href}">{label} ↓</a></div>'
-    return f'<section class="page-hero"><div class="wrap"><div class="crumb"><a href="index{suffix}">{home}</a> / {crumb}</div><h1>{title}</h1><p>{intro}</p>{buttons}</div></section>'
+    return f'<section class="page-hero"><div class="wrap"><div class="crumb"><a href="index{suffix}">{home}</a> / {crumb}</div><h1>{title}</h1><p>{intro}</p></div></section>'
 
 
 def article(label, title, lead, content, ident=''):
@@ -100,7 +97,7 @@ def index_en():
         route('05', 'Read TDX call flow', 'Follow host SEAMCALLs and guest TDCALLs, including TDG.VP.VMCALL.', 'tdx.html#calls', 'Open TDX call map'),
         route('06', 'Revisit in source', 'Map each architectural step to Linux KVM, guest code, Intel specs and a reproducible lab.', 'labs.html#sources', 'Open primary sources')
     ]) + '</div>'
-    brief = '<div class="signal"><strong>Remote attestation in one paragraph</strong>SGX and TDX can produce measured reports and remote quotes. A remote verifier checks evidence against a policy before an application trusts the environment. This site introduces those instructions only; quote formats, certificate chains and key release deserve a separate attestation study.</div>'
+    brief = '<div class="signal"><strong>Remote attestation in one paragraph</strong>SGX and TDX can produce measured reports and remote quotes. A remote verifier checks the evidence against a policy before an application trusts the environment. <a class="inline-link" href="tdx.html#remote-attestation">Trace the TDX attestation architecture ↗</a></div>'
     return hero + section('01 / THE TWO MECHANISMS', 'Learn each boundary on its own terms', 'SGX and TDX solve different isolation problems. The pages below go into the CPU mechanisms, not a single unified deployment story.', cards, 'white') + section('02 / ARCHITECTURE MAP', 'The important differences at a glance', 'Use this as a map before reading the instruction tables.', compare) + section('03 / LEARNING ROUTE', 'Six concrete steps', 'The route assumes familiarity with x86, virtual memory and virtualization; it goes straight to the new mechanisms.', path, 'tinted') + section('04 / BRIEF CONTEXT', 'Where attestation fits', 'A small bridge from local isolation to remote use, without making it the center of this site.', brief, 'white', 'attestation')
 
 
@@ -126,7 +123,7 @@ def index_zh():
         route('05', '读 TDX 调用路径', '跟随宿主 SEAMCALL 与 Guest TDCALL，包括 TDG.VP.VMCALL。', 'tdx.zh.html#calls', '看 TDX 调用地图'),
         route('06', '回到源码', '把每一步对应到 Linux KVM、Guest 代码、Intel 规范与可复现实验。', 'labs.zh.html#sources', '打开一手资料')
     ]) + '</div>'
-    brief = '<div class="signal"><strong>用一段话定位远程证明</strong>SGX 与 TDX 可产生带测量信息的 report 和远程 quote；远端验证者按策略检查证据，应用才决定是否信任该环境。本站只介绍相关指令的作用。Quote 格式、证书链与密钥释放将留给独立的远程证明专题。</div>'
+    brief = '<div class="signal"><strong>用一段话定位远程证明</strong>SGX 与 TDX 可产生包含度量信息的报告和 Quote。远程验证者按策略检查证据，应用据此决定是否信任该环境。<a class="inline-link" href="tdx.zh.html#remote-attestation">查看 TDX 远程证明架构 ↗</a></div>'
     return hero + section('01 / 两项机制', '分别学清各自的边界', 'SGX 与 TDX 解决不同隔离问题。下面的章节深入 CPU 机制，不把它们强行塞进一条部署故事。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '六个具体步骤', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
 
 
@@ -198,8 +195,120 @@ def sgx_zh():
     return hero + article('01 / 平台支持', '先确认硬件与固件', '“这个 CPU 家族支持 SGX”并不证明眼前的机器提供可用的 enclave 功能。', hardware, 'hardware') + article('02 / 内存模型', '记住四个关键结构', '跟随一个页面从普通内存进入 EPC，并经过 CPU 元数据检查。', diagram('sgx_memory', 'zh') + memory, 'memory') + article('03 / 指令地图', '按 ENCLS 与 ENCLU 读生命周期', '先按执行者和状态变化分组，再去记操作码。', instructions, 'instructions') + article('04 / 执行路径', '从创建到中断的一次运行', 'AEX 与恢复是理解中断和不可信调度的关键。', diagram('sgx_execution', 'zh') + flow, 'flow') + article('05 / 安全边界', '隔离仍留给软件的问题', 'Enclave 阻止页面被直接读取；宿主接口和侧信道行为仍需单独设计。', boundary)
 
 
+def tdx_contents(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    entries = [
+        ('architecture', t('Architecture', '整体架构')),
+        ('platform-boot', t('Platform startup', '平台启动')),
+        ('memory', t('Private memory', '私有内存')),
+        ('calls', t('Module calls', '模块调用')),
+        ('flow', t('TD lifecycle', 'TD 生命周期')),
+        ('td-measurement', t('TD measurement', 'TD 度量')),
+        ('tdx-connect', 'TDX Connect'),
+        ('service-td', 'Service TD'),
+        ('remote-attestation', t('Remote attestation', '远程证明')),
+        ('migration', t('TD migration', 'TD 迁移')),
+    ]
+    items = ''.join(f'<li><a href="#{ident}">{label}</a></li>' for ident, label in entries)
+    return f'<nav class="tdx-contents" aria-label="{t("TDX contents", "TDX 章节目录")}"><ul class="wrap">{items}</ul></nav>'
+
+
+def tdx_overview(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    figure = intel_figure(lang, 'architecture', t('Intel TDX components overview', 'Intel TDX 组件全景'),
+        t('Legacy VMs sit above the host VMM. Trust Domains run beside them, with the TDX module below them in SEAM root mode.',
+          '传统虚拟机由宿主 VMM 管理。Trust Domain 与传统虚拟机并存，由处于 SEAM root 的 TDX 模块管理保护边界。'),
+        t('Compare the access-control boundaries around the legacy VMs and the TDs. The host schedules both, while the module controls private TD state and mappings.',
+          '对照图中传统虚拟机与 TD 周围的访问控制边界。宿主调度两类虚拟机，模块控制 TD 私有状态与映射。'))
+    return tdx_contents(lang) + article(t('ARCHITECTURE', '架构总览'), t('The platform, the module and the Trust Domain', '平台、TDX 模块与 Trust Domain'),
+        t('A TDX-aware VMM supplies resources and schedules vCPUs. The Intel TDX module runs in SEAM root and enforces TD isolation using CPU virtualization, protected memory mappings and private KeyIDs.',
+          '支持 TDX 的 VMM 提供资源并调度 vCPU。Intel TDX 模块运行在 SEAM root，借助 CPU 虚拟化、受保护的内存映射和私有 KeyID 执行 TD 隔离。'), figure, 'architecture')
+
+
+def tdx_startup(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    path = diagram_flow([
+        node(t('Platform firmware', '平台固件'), t('SEAMRR, CMRs and private KeyIDs', '配置 SEAMRR、CMR 与私有 KeyID')),
+        arrow(), node('NP-SEAMLDR ACM', t('Installs P-SEAMLDR', '安装 P-SEAMLDR')),
+        arrow(), node('P-SEAMLDR', t('Verifies and installs the TDX module', '验证并安装 TDX 模块')),
+        arrow(), node(t('TDX module ready', 'TDX 模块就绪'), t('Host calls initialize CPUs and memory', '宿主调用初始化 CPU 与内存'), 'protected'),
+    ])
+    boot_flow = frame(lang, 'tdx-startup-flow', t('From platform boot to module readiness', '从平台启动到模块就绪'), path,
+        t('Firmware or host software can drive loading according to the platform design. The host initializes the installed module before creating TDs.',
+          '固件或宿主软件可按平台设计发起加载。创建 TD 之前，宿主还需初始化已安装的模块。'),
+        BASE[2] + '#page=33', t('Intel TDX Base Architecture §3.1.1', 'Intel TDX 基础架构 §3.1.1'))
+    range_figure = intel_figure(lang, 'seam-range', t('SEAMRR and the two SEAM subranges', 'SEAMRR 与 SEAM 的两个子区域'),
+        t('NP-SEAMLDR installs P-SEAMLDR into its reserved range. P-SEAMLDR installs the TDX module into MODULE_RANGE.',
+          'NP-SEAMLDR 把 P-SEAMLDR 装入其保留区，后者将 TDX 模块装入 MODULE_RANGE。'),
+        t('Follow the two install arrows. The firmware programs SEAMRR to define the protected range that contains both subranges.',
+          '沿图中的两条安装箭头阅读。固件用 SEAMRR 定义受保护的物理地址范围，其中包含这两个子区域。'))
+    init_figure = intel_figure(lang, 'module-lifecycle', t('TDX module initialization and lifecycle', 'TDX 模块初始化与状态机'),
+        t('The module progresses from SYSINIT_PENDING to SYSINIT_DONE, SYSCONFIG_DONE and SYS_READY. Other paths cover disable and shutdown.',
+          '模块依次经过 SYSINIT_PENDING、SYSINIT_DONE、SYSCONFIG_DONE 和 SYS_READY。图中也给出停用与关闭路径。'),
+        t('Trace the first-time initialization path through the yellow states to SYS_READY. The arrows also show optional module lifecycle operations.',
+          '沿黄色状态追踪首次初始化，直到 SYS_READY。其余箭头展示可选的模块生命周期操作。'))
+    return '<h3 class="tdx-subhead" id="platform-boot">' + t('Platform startup and SEAM Loader', '平台启动与 SEAM Loader') + '</h3>' + boot_flow + range_figure + '<p>' + t(
+        'The Non-Persistent SEAM Loader is an Authenticated Code Module (ACM). It installs the Persistent SEAM Loader, which accepts <code>SEAMLDR.INSTALL</code> via SEAMCALL. P-SEAMLDR checks the signed module information, measures the loaded image and records its identity for attestation. This measurement identifies the platform module.',
+        'NP-SEAMLDR 是经认证的代码模块（ACM）。它安装常驻的 P-SEAMLDR，后者通过 SEAMCALL 接收 <code>SEAMLDR.INSTALL</code>，核验已签名的模块信息，对加载的镜像做度量，并记录用于证明的模块身份。这份度量对应平台上的 TDX 模块。',
+    ) + '</p>' + init_figure + '<p>' + t(
+        'The host calls <code>TDH.SYS.INIT</code>, initializes each logical processor with <code>TDH.SYS.LP.INIT</code>, configures the TDMRs and PAMT with <code>TDH.SYS.CONFIG</code>, and configures the global key on each package. <code>TDH.SYS.TDMR.INIT</code> initializes the associated PAMT ranges before the memory can back TD private pages.',
+        '宿主先调用 <code>TDH.SYS.INIT</code> 做全局初始化，再对每个逻辑处理器调用 <code>TDH.SYS.LP.INIT</code>，用 <code>TDH.SYS.CONFIG</code> 配置 TDMR 和 PAMT，并在每个处理器封装上配置模块全局密钥。<code>TDH.SYS.TDMR.INIT</code> 初始化相应的 PAMT 区域后，内存才可用于 TD 私有页。',
+    ) + '</p>'
+
+
+def tdx_mode_figure(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    return intel_figure(lang, 'execution-modes', t('VMX and SEAM execution modes', 'VMX 与 SEAM 执行模式'),
+        t('The right-hand SEAM region shows the TD and the TDX module, linked to the host VMM by entry, exit and SEAMCALL paths.',
+          '右侧 SEAM 区域包含 TD 与 TDX 模块，并展示与宿主 VMM 之间的进入、退出和 SEAMCALL 路径。'),
+        t('Start at the Host VMM in the middle and follow SEAMCALL into the module. Then trace the guest-side function from the TD on the upper right.',
+          '从中部 Host VMM 沿 SEAMCALL 进入模块，再从右上角的 TD 沿 Guest-side Function 进入模块。'))
+
+
+def tdx_ept_figure(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    return intel_figure(lang, 'secure-ept', t('Secure EPT and shared EPT', 'Secure EPT 与共享 EPT'),
+        t('The GPA shared bit selects shared or secure extended page tables. The two paths use different memory encryption keys.',
+          'GPA 的共享位决定使用共享 EPT 还是 Secure EPT。两条路径使用不同的内存加密密钥。'),
+        t('Follow GPA.SHARED in the lower half. Shared and private guest physical addresses use separate translation paths and map into host physical memory.',
+          '沿图下半部的 GPA.SHARED 阅读。共享和私有 Guest 物理地址分别走不同的转换路径，最终映射到宿主物理内存。'))
+
+
+def tdx_measurement(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    build = diagram_flow([
+        node('TDH.MNG.INIT', t('Initialize MRTD', '初始化 MRTD')),
+        arrow(), node('TDH.MEM.PAGE.ADD', t('Add an initial page and measure its GPA', '添加初始页并纳入 GPA')),
+        arrow(), node('TDH.MR.EXTEND', t('Measure selected contents in 256-byte blocks', '按 256 字节块纳入选定内容')),
+        arrow(), node('TDH.MR.FINALIZE', t('Finalize MRTD', '完成 MRTD'), 'protected'),
+    ])
+    build_flow = frame(lang, 'td-build-measurement', t('Build-time measurement', '构建期度量'), build,
+        t('The VMM repeats page addition and extension as needed. Initial TD firmware commonly contributes to this SHA-384 digest.',
+          'VMM 按需重复添加页面和扩展操作。初始 TD 固件通常纳入这份 SHA-384 摘要。'),
+        BASE[2] + '#page=145', t('Intel TDX Base Architecture §12.2.1', 'Intel TDX 基础架构 §12.2.1'))
+    reporting = intel_figure(lang, 'measurement', t('From module and TD measurements to TDREPORT', '模块与 TD 度量如何进入 TDREPORT'),
+        t('TEE_TCB_INFO and TDINFO_STRUCT are separately hashed into REPORTMACSTRUCT, which also carries REPORTDATA and a MAC.',
+          'TEE_TCB_INFO 和 TDINFO_STRUCT 分别计算摘要并写入 REPORTMACSTRUCT，后者还包含 REPORTDATA 和 MAC。'),
+        t('Figure 12.1 covers report structure versions 0, 1 and 3. Follow MRSEAM at the top and MRTD and RTMRs below it. REPORTDATA comes from the guest caller.',
+          '图 12.1 对应报告结构版本 0、1 和 3。先看上方的 MRSEAM，再看下方的 MRTD 与 RTMR。REPORTDATA 由 Guest 调用者提供。'))
+    fields = table(t(('Field', 'How to read it'), ('字段', '含义')), [
+        ('<code>MRSEAM</code>', t('Identity measurement of the loaded TDX module in TEE_TCB_INFO.', 'TEE_TCB_INFO 中已加载的 TDX 模块身份度量。')),
+        ('<code>MRTD</code>', t('Build digest over the recorded initial TD layout and explicitly extended contents.', '记录初始 TD 布局和显式纳入度量的内容。')),
+        ('<code>RTMR[0..3]</code>', t('Four SHA-384 registers the guest can extend via <code>TDG.MR.RTMR.EXTEND</code>. Firmware and guest software can measure boot events and record them in an event log for replay by a verifier.',
+                                 '四个 SHA-384 寄存器，Guest 可通过 <code>TDG.MR.RTMR.EXTEND</code> 扩展。固件和 Guest 软件可度量启动事件，并记录事件日志供验证者重算。')),
+        ('<code>REPORTDATA</code>', t('64 bytes provided by the guest when requesting a report. A protocol can use them to bind a challenge and the guest’s public key to the evidence.',
+                                     'Guest 请求报告时提供的 64 字节。证明协议可用它将挑战值和 Guest 公钥绑定到证据。')),
+    ])
+    return '<h3 class="tdx-subhead" id="td-measurement">' + t('TD build and runtime measurements', 'TD 构建期与运行期度量') + '</h3>' + build_flow + fields + reporting
+
+
 def tdx_connect(lang):
     t = lambda en, zh: tr(lang, en, zh)
+    framework = intel_figure(lang, 'connect', t('Intel TDX Connect framework', 'Intel TDX Connect 框架'),
+        t('A host with a TDX module, IOMMU and Root Port connects to an endpoint with a DSM and TDIs. A secure SPDM session and a Selective IDE stream cross the fabric.',
+          '宿主的 TDX 模块、IOMMU 和根端口连接到包含 DSM 与 TDI 的设备端点。SPDM 安全会话和 Selective IDE 流跨越 PCIe 互连。'),
+        t('Trace the dashed red SPDM session for control messages and the solid red IDE stream for protected PCIe traffic. The figure also shows two TDs with separately assigned device interfaces.',
+          '红色虚线表示承载控制消息的 SPDM 会话，红色实线表示保护 PCIe 数据事务的 IDE 流。图中还展示了分别分配给两个 TD 的设备接口。'))
     protocols = table(
         t(('Layer', 'What it does', 'Where it runs'), ('层次', '解决什么问题', '在哪里执行')),
         [
@@ -256,12 +365,109 @@ def tdx_connect(lang):
                    t('TDX Connect and TDISP', 'TDX Connect 与 TDISP'),
                    t('Base TDX protects the VM’s private CPU and memory state. Conventional I/O often uses shared buffers, with software copying or encrypting sensitive data as needed. TDX Connect extends the TD’s trust boundary to a specifically accepted PCIe device function and lets it access authorized private buffers directly.',
                      '基础 TDX 保护虚拟机的私有 CPU 状态与内存。普通 I/O 常通过共享缓冲区中转，软件按需复制或加密敏感数据。TDX Connect 将 TD 的信任边界扩展到明确接受的 PCIe 设备功能，使其能直接访问获准的私有缓冲区。'),
-                   diagram('tdx_connect_paths', lang) + protocols + diagram('tdisp_states', lang) + lifecycle + example + status + sources,
+                   framework + diagram('tdx_connect_paths', lang) + protocols + diagram('tdisp_states', lang) + lifecycle + example + status + sources,
                    'tdx-connect')
 
 
+def tdx_service(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    binding = intel_figure(lang, 'service-binding', t('Service TD binding state machine', 'Service TD 绑定状态机'),
+        t('A target TD binding slot can be not bound, pre-bound, bound, or approved for rebind.',
+          '目标 TD 的绑定槽可处于未绑定、预绑定、已绑定或已授权重绑状态。'),
+        t('Follow PRE_BIND from NOT_BOUND to PRE_BOUND, then BIND into BOUND. The lower path covers optional rebind support.',
+          '从 NOT_BOUND 沿预绑定路径到 PRE_BOUND，再通过 BIND 进入 BOUND。下方是可选的重绑路径。'))
+    details = '<ol>' + ''.join(f'<li>{step}</li>' for step in [
+        t('<b>Declare the service.</b> The host can use <code>TDH.SERVTD.PREBIND</code> to record an expected service measurement, type and attributes in a slot in the target TD’s TDCS. The service instance can be attached later.',
+          '<b>声明服务。</b>宿主可用 <code>TDH.SERVTD.PREBIND</code> 在目标 TD 的 TDCS 绑定槽中登记预期的服务度量、类型和属性，随后再绑定服务实例。'),
+        t('<b>Bind an instance.</b> <code>TDH.SERVTD.BIND</code> checks the applicable binding parameters and returns a handle. The target’s <code>SERVTD_HASH</code> reflects the service binding configuration for attestation.',
+          '<b>绑定实例。</b><code>TDH.SERVTD.BIND</code> 检查适用的绑定参数并返回句柄。目标 TD 的 <code>SERVTD_HASH</code> 将服务绑定配置纳入证明。'),
+        t('<b>Access allowed fields.</b> The module checks the service instance and its binding type when it handles <code>TDG.SERVTD.RD</code> or <code>TDG.SERVTD.WR</code>. The binding authorizes selected target metadata fields.',
+          '<b>访问获准字段。</b>模块处理 <code>TDG.SERVTD.RD</code> 或 <code>TDG.SERVTD.WR</code> 时检查服务实例和绑定类型。授权范围是目标 TD 的特定元数据字段。'),
+    ]) + '</ol>'
+    return article(t('07 / SERVICE TD', '07 / 服务 TD'), t('Bind a Service TD to a target TD', '把 Service TD 绑定到目标 TD'),
+        t('A Service TD is a separate Trust Domain with a module-enforced relationship to the target. Migration TD (MigTD) is the service type described in the current base architecture.',
+          'Service TD 是独立运行的 Trust Domain。它与目标 TD 的绑定关系由模块执行。当前基础架构规范描述的服务类型是 Migration TD（MigTD）。'),
+        binding + details, 'service-td')
+
+
+def tdx_attestation(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    path = diagram_flow([
+        node(t('Remote verifier', '远程验证者'), t('Issues a fresh challenge', '发出新鲜挑战值')),
+        arrow(), node(t('Guest TD', 'Guest TD'), t('Binds challenge to TDREPORT', '将挑战值绑定到 TDREPORT'), 'protected'),
+        arrow(), node(t('Quoting component', 'Quote 生成组件'), t('Authenticates the report and signs a quote', '校验报告并签署 Quote')),
+        arrow(), node(t('Remote verifier', '远程验证者'), t('Checks the quote, collateral and policy', '检查 Quote、验证材料与策略'), 'protected'),
+    ])
+    round_trip = frame(lang, 'tdx-remote-attestation-flow', t('The remote attestation round trip', '远程证明的往返流程'), path,
+        t('The verifier checks the returned REPORTDATA against its challenge and the protocol’s binding rules.',
+          '验证者根据自己发出的挑战值和协议的绑定规则核对返回的 REPORTDATA。'),
+        'https://cc-enabling.trustedservices.intel.com/intel-tdx-enabling-guide/02/infrastructure_setup/', 'Intel TDX Enabling Guide')
+    quote = intel_figure(lang, 'attestation', t('Intel’s SGX-based TDX quote generation path', 'Intel 基于 SGX 的 TDX Quote 生成路径'),
+        t('A guest requests a MAC-protected report through the TDX module. A TD Quoting Enclave on the same platform verifies it and produces a signed quote.',
+          'Guest 通过 TDX 模块生成受 MAC 保护的报告。同平台的 TD Quoting Enclave 校验报告并生成签名 Quote。'),
+        t('The right side generates the report. The left side shows the TD Quoting Enclave and EVERIFYREPORT2. Remote verification happens after this figure’s signed quote leaves the platform.',
+          '右侧生成报告，左侧是 TD Quoting Enclave 与 EVERIFYREPORT2。图中签名 Quote 离开平台后，才进入远程验证。'))
+    verification = table(t(('Stage', 'Actor and security check'), ('阶段', '参与者与安全检查')), [
+        (t('Challenge and report', '挑战与报告'), t('The attester puts a protocol-defined challenge or challenge/key digest into <code>REPORTDATA</code> and calls <code>TDG.MR.REPORT</code>. The module returns a platform-local <code>TDREPORT</code> authenticated by a hardware-backed MAC.',
+                                                '证明方按协议将挑战值或挑战值与公钥的摘要放入 <code>REPORTDATA</code>，调用 <code>TDG.MR.REPORT</code>。模块返回带有硬件支持 MAC 的本地 <code>TDREPORT</code>。')),
+        (t('Quote generation', '生成 Quote'), t('In the DCAP path in the figure, the guest submits its report to the host Quote Generation Service (QGS). The local TD Quoting Enclave (TDQE) verifies the report and produces an ECDSA-signed quote. The guest–host transport depends on the implementation.',
+                                              '在图中的 DCAP 路径里，Guest 将报告交给宿主 Quote Generation Service（QGS）。本机 TD Quoting Enclave（TDQE）校验报告后生成 ECDSA 签名的 Quote。Guest 与宿主之间的传输方式取决于实现。')),
+        (t('Remote verification', '远程验证'), t('The verifier checks the quote signature and certification chain using Intel collateral such as PCK certificates, revocation lists, TCB Info and QE Identity. It checks freshness and any key binding through <code>REPORTDATA</code>, then evaluates module TCB, TD measurements and attributes against its own policy.',
+                                              '验证者使用 Intel 的 PCK 证书、撤销列表、TCB Info、QE Identity 等材料验证 Quote 签名及认证链，通过 <code>REPORTDATA</code> 检查新鲜度及公钥绑定，再按自己的策略评估模块 TCB、TD 度量及属性。')),
+    ])
+    sources = '<div class="source-grid tdx-sources">' + ''.join([
+        link('https://cc-enabling.trustedservices.intel.com/intel-tdx-enabling-guide/02/infrastructure_setup/',
+             t('Intel TDX Enabling Guide', 'Intel TDX 启用指南'), t('QGS, PCCS and attestation infrastructure', 'QGS、PCCS 与证明基础设施')),
+        link(BASE[2] + '#page=149', t('Intel TDX Base Architecture §12.6', 'Intel TDX 基础架构 §12.6'),
+             t('SGX-based quoting and Security Engine / Quoting TD models', '基于 SGX 的 Quote 以及 Security Engine / Quoting TD 模型')),
+    ]) + '</div>'
+    alternatives = '<p>' + t(
+        'Intel also describes Security Engine-backed attestation and Quoting TD on supported platforms. The platform and deployment determine which quoting path and evidence format are available.',
+        'Intel 也描述了由 Security Engine 支持的证明及 Quoting TD 模型。可用的 Quote 生成路径和证据格式由具体平台与部署决定。',
+    ) + '</p>'
+    return article(t('08 / REMOTE ATTESTATION', '08 / 远程证明'), t('From TDREPORT to a remote trust decision', '从 TDREPORT 到远程信任决策'),
+        t('A local report binds TD measurements to data supplied by the guest. A quoting component produces evidence a remote verifier can authenticate and evaluate.',
+          '本地报告将 TD 度量与 Guest 提供的数据绑定。Quote 生成组件将它转换为可由远端验证者认证和评估的证据。'),
+        round_trip + quote + verification + alternatives + sources, 'remote-attestation')
+
+
+def tdx_migration(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    architecture = intel_figure(lang, 'migration-architecture', t('Source and destination migration components', '源端与目的端的迁移组件'),
+        t('Both platforms have a Migration TD, a TDX module and a host VMM. The Migration TDs exchange keys and the VMMs move protected migration bundles.',
+          '两侧平台各有 Migration TD、TDX 模块与宿主 VMM。Migration TD 交换密钥，VMM 搬运受保护的迁移数据包。'),
+        t('Follow the upper path between the two MigTDs for policy and key exchange, and the lower path between host VMMs for transport.',
+          '上方连接两个 MigTD 的路径用于策略与密钥协商，下方连接两个宿主 VMM 的路径用于传输。'))
+    in_order = intel_figure(lang, 'migration-in-order', t('Live export and the pause window', '在线导出与暂停窗口'),
+        t('The source can run during live export. It then pauses before export of the final TD and vCPU state and issuance of the start token.',
+          '源端在在线导出期间可运行，随后暂停并导出最终 TD 和 vCPU 状态，生成启动令牌。'),
+        t('Compare LIVE_EXPORT with PAUSED_EXPORT. The arrows connect the ordered exports at source to the corresponding imports at destination.',
+          '对照 LIVE_EXPORT 与 PAUSED_EXPORT。箭头将源端有序导出操作与目的端对应的导入操作相连。'))
+    out_of_order = intel_figure(lang, 'migration-out-of-order', t('Destination commit and remaining memory import', '目的端提交与剩余内存导入'),
+        t('After the start token, remaining memory may be imported out of order. Commit allows the destination to run while memory import continues.',
+          '接收启动令牌后，剩余内存可乱序导入。提交后目的端可以恢复运行，同时继续导入内存。'),
+        t('Read the green band at the bottom for the point at which the destination may run. IMPORT.END closes the session after import is complete.',
+          '底部绿色区域标出目的端获准运行的时点。导入完成后，IMPORT.END 结束迁移会话。'))
+    steps = '<ol>' + ''.join(f'<li>{step}</li>' for step in [
+        t('<b>Prepare both endpoints.</b> The destination VMM creates a TD skeleton. Bound MigTDs establish trust according to migration policy, agree on a protocol version and securely transfer the ephemeral migration session keys. The modules use AES-256-GCM to protect the TD private state in transit.',
+          '<b>准备两端。</b>目的端 VMM 创建 TD 骨架。绑定的 MigTD 按迁移策略建立信任，协商协议版本并安全传递临时迁移会话密钥。模块用 AES-256-GCM 保护传输中的 TD 私有状态。'),
+        t('<b>Export while the source is running, then pause.</b> The modules process <code>TDH.EXPORT.*</code> and <code>TDH.IMPORT.*</code> calls for metadata and memory. Live migration can export memory while the source runs. After the source pauses, the module exports the final non-memory state and issues a start token at the end of the in-order phase.',
+          '<b>源端运行时导出，再进入暂停窗口。</b>模块通过 <code>TDH.EXPORT.*</code> 和 <code>TDH.IMPORT.*</code> 处理元数据与内存。热迁移可在源端运行时导出内存。暂停后，模块导出最终非内存状态，并在有序阶段结束时发出启动令牌。'),
+        t('<b>Commit and resume.</b> The destination consumes the start token. <code>TDH.IMPORT.COMMIT</code> can permit execution before all remaining memory arrives. The session state and tokens constrain when either side can run and govern whether an abort can return control to the source.',
+          '<b>提交并恢复运行。</b>目的端接收并验证启动令牌。<code>TDH.IMPORT.COMMIT</code> 可在剩余内存全部到达前允许目的端运行。会话状态和令牌约束两端各自何时可运行，以及中止时能否回到源端。'),
+    ]) + '</ol>'
+    references = '<div class="source-grid tdx-sources">' + ''.join([
+        link(MIGRATION[2], t('Intel TD Migration Architecture', 'Intel TD 迁移架构规范'), t('June 2026 baseline, session and state machines', '2026 年 6 月基线，会话与状态机')),
+        link('https://cdrdv2.intel.com/v1/dl/getContent/733580', t('Intel Migration TD Design Guide', 'Intel Migration TD 设计指南'), t('MigTD software, peer trust and migration policy', 'MigTD 软件、对端信任与迁移策略')),
+    ]) + '</div>'
+    return article(t('09 / TD MIGRATION', '09 / TD 迁移'), t('Move a TD between two TDX platforms', '在两台 TDX 平台之间迁移 TD'),
+        t('MigTD handles trust policy and key exchange. The source and destination modules protect private state during export and import. The host VMMs orchestrate the session and transport migration bundles.',
+          'MigTD 负责信任策略与密钥交换，源端和目的端的模块在导出和导入时保护私有状态，宿主 VMM 负责会话编排与迁移数据包传输。'),
+        architecture + steps + in_order + out_of_order + references, 'migration')
+
+
 def tdx_en():
-    hero = page_hero('en', 'INTEL TDX', 'A VM boundary enforced<br><em>below the hypervisor</em>', 'Follow the TDX module in SEAM, private memory translation, and the distinct calls made by a host VMM and a guest Trust Domain.', action=('#tdx-connect', 'TDX Connect and trusted I/O'))
+    hero = page_hero('en', 'INTEL TDX', 'A VM boundary enforced<br><em>below the hypervisor</em>', 'Follow the TDX module in SEAM, private memory translation, and the distinct calls made by a host VMM and a guest Trust Domain.')
     hardware = '<div class="detail-grid">' + ''.join([
         detail('CPU', 'Check the exact Xeon SKU', 'TDX host support begins with selected 4th Gen Intel Xeon Scalable processors and continues on selected later server platforms. Generation alone is not a support guarantee.'),
         detail('FIRMWARE', 'Initialize the platform', 'BIOS/UEFI must enable TDX and configure SEAM, SEAMRR and private KeyIDs. A compatible Intel TDX module must be loaded before the host can create TDs.'),
@@ -283,20 +489,32 @@ def tdx_en():
         ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.INFO</code>', 'Query TD and virtual-processor information.'),
         ('Guest TD · <code>TDCALL</code>', '<code>TDG.MEM.PAGE.ACCEPT</code>', 'Accept a pending private page before use.'),
         ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.VMCALL</code>', 'Request host VMM service; often called TDVMCALL.'),
-        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MR.REPORT</code>', 'Generate a local TD report; remote attestation is covered only briefly here.')
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MR.REPORT</code>', 'Generate a local TD report for the <a class="inline-link" href="#remote-attestation">quote generation flow</a>.')
     ]) + '<p class="source-note">SEAMCALL and TDCALL are CPU instructions; the TDH.* and TDG.* names are TDX module API leaves. TDVMCALL is the TDG.VP.VMCALL leaf, not a third instruction. Verify operands, status codes and version-specific behavior in Intel’s <a class="inline-link" href="https://cdrdv2-public.intel.com/853289/intel-tdx-module-abi-spec-348551006.pdf">TDX module ABI specification</a>.</p>'
     flow = '<div class="stack">' + ''.join([
-        '<div class="stack-row"><b>PREPARE</b><span>Firmware enables TDX and loads the module; the Linux host initializes it and exposes KVM capabilities.</span></div>',
+        '<div class="stack-row"><b>PREPARE</b><span>Firmware enables TDX. After <a class="inline-link" href="#platform-boot">module installation and initialization</a>, Linux exposes KVM capabilities.</span></div>',
         '<div class="stack-row"><b>BUILD</b><span>VMM issues KVM TDX ioctls; KVM uses SEAMCALL leaves to create the TD, add initial memory, create vCPUs and finalize the initial image.</span></div>',
         '<div class="stack-row"><b>RUN</b><span>Host uses TDH.VP.ENTER; guest code runs privately and may call TDG.MEM.PAGE.ACCEPT or TDG.VP.INFO through TDCALL.</span></div>',
         '<div class="stack-row"><b>EXIT</b><span>TD exit returns control to the host for permitted handling. TDG.VP.VMCALL explicitly asks for a host service; a virtualization exception (#VE) can instead be handled within the guest.</span></div>'
     ]) + '</div><p class="source-note">The <a class="inline-link" href="https://docs.kernel.org/virt/kvm/x86/intel-tdx.html">Linux KVM TDX guide</a> documents the userspace ioctl layer; it is distinct from the SEAMCALL ABI.</p>'
     boundary = '<div class="split"><div class="panel"><h3>Private TD state</h3><p>CPU, module and memory metadata protect private guest pages and TD state from direct host access. The host still controls scheduling and supplies virtual devices.</p></div><div class="panel"><h3>Shared boundary</h3><p>Guest-shared pages, emulated I/O and VMM responses are untrusted inputs. TDX does not by itself guarantee availability or eliminate timing and microarchitectural side channels.</p></div></div>'
-    return hero + article('01 / PLATFORM SUPPORT', 'A chain of hardware and software prerequisites', 'Confirm the actual processor, firmware settings, TDX module, host KVM and guest capabilities separately.', hardware, 'hardware') + article('02 / MEMORY MODEL', 'How private pages remain private', 'SEAM, KeyIDs, Secure EPT and PAMT work together. Shared pages are an explicit exception.', diagram('tdx_memory', 'en') + memory, 'memory') + article('03 / CALL MAP', 'Separate host SEAMCALL from guest TDCALL', 'The leaf name tells you which side requested the operation and what state transition it needs.', diagram('tdx_calls', 'en') + calls, 'calls') + article('04 / LIFECYCLE', 'Build, enter, run and exit a TD', 'Keep the userspace KVM interface, module ABI and guest interface as three layers.', flow, 'flow') + article('05 / SECURITY BOUNDARY', 'What the VMM still controls', 'Read the private/shared split before placing secrets or trusting virtual devices.', boundary) + tdx_connect('en')
+    return (
+        hero
+        + tdx_overview('en')
+        + article('01 / PLATFORM SUPPORT', 'A chain of hardware and software prerequisites', 'Confirm the actual processor, firmware settings, TDX module, host KVM and guest capabilities separately.', hardware + tdx_startup('en'), 'hardware')
+        + article('02 / MEMORY MODEL', 'How private pages remain private', 'SEAM, KeyIDs, Secure EPT and PAMT work together. Shared pages are an explicit exception.', diagram('tdx_memory', 'en') + memory + tdx_ept_figure('en'), 'memory')
+        + article('03 / CALL MAP', 'Separate host SEAMCALL from guest TDCALL', 'The leaf name tells you which side requested the operation and what state transition it needs.', diagram('tdx_calls', 'en') + calls + tdx_mode_figure('en'), 'calls')
+        + article('04 / LIFECYCLE', 'Build, enter, run and exit a TD', 'Keep the userspace KVM interface, module ABI and guest interface as three layers.', flow + tdx_measurement('en'), 'flow')
+        + article('05 / SECURITY BOUNDARY', 'What the VMM still controls', 'Read the private/shared split before placing secrets or trusting virtual devices.', boundary)
+        + tdx_connect('en')
+        + tdx_service('en')
+        + tdx_attestation('en')
+        + tdx_migration('en')
+    )
 
 
 def tdx_zh():
-    hero = page_hero('zh', 'INTEL TDX', '在 Hypervisor 之下<br><em>建立虚拟机边界</em>', '跟随 SEAM 中的 TDX 模块、私有内存地址转换，以及宿主 VMM 与 Guest Trust Domain 各自发出的调用。', action=('#tdx-connect', 'TDX Connect 与可信 I/O'))
+    hero = page_hero('zh', 'INTEL TDX', '在 Hypervisor 之下<br><em>建立虚拟机边界</em>', '跟随 SEAM 中的 TDX 模块、私有内存地址转换，以及宿主 VMM 与 Guest Trust Domain 各自发出的调用。')
     hardware = '<div class="detail-grid">' + ''.join([
         detail('CPU', '核对 Xeon 具体 SKU', '宿主 TDX 支持始于部分第 4 代 Intel Xeon Scalable 处理器，并延续到部分更新的服务器平台；仅凭代际不能确定支持。'),
         detail('固件', '初始化平台', 'BIOS/UEFI 需要启用 TDX，配置 SEAM、SEAMRR 与私有 KeyID。宿主创建 TD 前须加载兼容的 Intel TDX 模块。'),
@@ -318,16 +536,28 @@ def tdx_zh():
         ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.INFO</code>', '查询 TD 与虚拟处理器信息。'),
         ('Guest TD · <code>TDCALL</code>', '<code>TDG.MEM.PAGE.ACCEPT</code>', '使用前接受待确认的私有页。'),
         ('Guest TD · <code>TDCALL</code>', '<code>TDG.VP.VMCALL</code>', '请求宿主 VMM 服务，常称 TDVMCALL。'),
-        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MR.REPORT</code>', '生成本地 TD report；这里仅简要涉及远程证明。')
+        ('Guest TD · <code>TDCALL</code>', '<code>TDG.MR.REPORT</code>', '生成供<a class="inline-link" href="#remote-attestation">后续 Quote 流程</a>使用的本地 TD 报告。')
     ]) + '<p class="source-note">SEAMCALL 和 TDCALL 是 CPU 指令；TDH.* 与 TDG.* 是 TDX 模块 API 的 leaf。TDVMCALL 是 TDG.VP.VMCALL leaf，不是第三条指令。操作数、状态码和版本差异请查 Intel <a class="inline-link" href="https://cdrdv2-public.intel.com/853289/intel-tdx-module-abi-spec-348551006.pdf">TDX 模块 ABI 规范</a>。</p>'
     flow = '<div class="stack">' + ''.join([
-        '<div class="stack-row"><b>准备</b><span>固件启用 TDX 并加载模块；Linux 宿主初始化模块，暴露 KVM 能力。</span></div>',
+        '<div class="stack-row"><b>准备</b><span>固件启用 TDX。<a class="inline-link" href="#platform-boot">安装并初始化模块</a>后，Linux 宿主提供 KVM 能力。</span></div>',
         '<div class="stack-row"><b>构建</b><span>VMM 发出 KVM TDX ioctl；KVM 用 SEAMCALL leaf 创建 TD、添加初始内存和 vCPU，并完成初始镜像。</span></div>',
         '<div class="stack-row"><b>运行</b><span>宿主用 TDH.VP.ENTER；Guest 私有执行，并可通过 TDCALL 调用 TDG.MEM.PAGE.ACCEPT 或 TDG.VP.INFO。</span></div>',
         '<div class="stack-row"><b>退出</b><span>TD exit 把控制权交还宿主处理允许的事件。TDG.VP.VMCALL 显式请求宿主服务；虚拟化异常 #VE 则可由 Guest 内部处理。</span></div>'
     ]) + '</div><p class="source-note"><a class="inline-link" href="https://docs.kernel.org/virt/kvm/x86/intel-tdx.html">Linux KVM TDX 指南</a>记录用户态 ioctl 层，它与 SEAMCALL ABI 不是同一层。</p>'
     boundary = '<div class="split"><div class="panel"><h3>TD 私有状态</h3><p>CPU、模块和内存元数据阻止宿主直接访问私有 Guest 页面及 TD 状态。宿主仍控制调度，并提供虚拟设备。</p></div><div class="panel"><h3>共享边界</h3><p>Guest 共享页、模拟 I/O 与 VMM 响应都是不可信输入。TDX 本身不保证可用性，也不会消除时序和微架构侧信道。</p></div></div>'
-    return hero + article('01 / 平台支持', '硬件与软件缺一不可', '分别确认具体处理器、固件设置、TDX 模块、宿主 KVM 与 Guest 能力。', hardware, 'hardware') + article('02 / 内存模型', '私有页如何保持私有', 'SEAM、KeyID、Secure EPT 和 PAMT 协同工作；共享页是明确的例外。', diagram('tdx_memory', 'zh') + memory, 'memory') + article('03 / 调用地图', '分清宿主 SEAMCALL 与 Guest TDCALL', '从 leaf 名称即可看出请求来自哪一方，以及需要哪种状态转换。', diagram('tdx_calls', 'zh') + calls, 'calls') + article('04 / 生命周期', '构建、进入、运行与退出 TD', '把用户态 KVM 接口、模块 ABI 和 Guest 接口视为三个不同层次。', flow, 'flow') + article('05 / 安全边界', 'VMM 仍控制什么', '放置秘密或信任虚拟设备前，先读懂私有/共享边界。', boundary) + tdx_connect('zh')
+    return (
+        hero
+        + tdx_overview('zh')
+        + article('01 / 平台支持', '硬件与软件缺一不可', '分别确认具体处理器、固件设置、TDX 模块、宿主 KVM 与 Guest 能力。', hardware + tdx_startup('zh'), 'hardware')
+        + article('02 / 内存模型', '私有页如何保持私有', 'SEAM、KeyID、Secure EPT 和 PAMT 协同工作；共享页是明确的例外。', diagram('tdx_memory', 'zh') + memory + tdx_ept_figure('zh'), 'memory')
+        + article('03 / 调用地图', '分清宿主 SEAMCALL 与 Guest TDCALL', '从 leaf 名称即可看出请求来自哪一方，以及需要哪种状态转换。', diagram('tdx_calls', 'zh') + calls + tdx_mode_figure('zh'), 'calls')
+        + article('04 / 生命周期', '构建、进入、运行与退出 TD', '把用户态 KVM 接口、模块 ABI 和 Guest 接口视为三个不同层次。', flow + tdx_measurement('zh'), 'flow')
+        + article('05 / 安全边界', 'VMM 仍控制什么', '放置秘密或信任虚拟设备前，先读懂私有/共享边界。', boundary)
+        + tdx_connect('zh')
+        + tdx_service('zh')
+        + tdx_attestation('zh')
+        + tdx_migration('zh')
+    )
 
 
 def labs_en():
