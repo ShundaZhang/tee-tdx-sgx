@@ -1,10 +1,10 @@
-# TEE / TDX / SGX Atlas
+# TEE Atlas
 
-A bilingual learning site focused on Intel SGX and TDX principles, hardware requirements, memory structures, SGX instructions, and TDX module calls. It assumes familiarity with x86 and virtualization. The English edition is the default; visitors can switch to Chinese, and the preference is shared with the other ShundaZhang sites on the same GitHub Pages origin.
+A bilingual learning site focused on Intel SGX and TDX principles, hardware requirements, memory structures, SGX instructions, TDX module calls, and AMD SEV-SNP architecture. It assumes familiarity with x86 and virtualization. The English edition is the default; visitors can switch to Chinese, and the preference is shared with the other ShundaZhang sites on the same GitHub Pages origin.
 
-The site is static HTML and CSS with a small language-selection script. Run `python3 build.py` to rebuild the eight pages. The SGX chapter covers privilege levels, enclave call paths, local and remote attestation, and single- and multi-package provisioning. The TDX chapter covers module startup, TD measurement, trusted I/O, Service TD binding, DCAP remote attestation, and live migration.
+The site is static HTML and CSS with a small language-selection script. Run `python3 build.py` to rebuild the ten pages. The SGX chapter covers privilege levels, enclave call paths, local and remote attestation, and single- and multi-package provisioning. The TDX chapter covers module startup, TD measurement, trusted I/O, Service TD binding, DCAP remote attestation, and live migration. The AMD SEV chapter covers SNP memory validation, guest launch, report verification, trusted I/O, migration and a comparison with Intel TDX.
 
-Published at <https://shundazhang.github.io/tee-tdx-sgx/>. Primary documentation is linked from each TDX topic and the Labs & sources page.
+Published at <https://shundazhang.github.io/tee-tdx-sgx/>. Primary documentation is linked from each platform chapter and the Labs & sources page.
 
 ## Visual guides
 

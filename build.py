@@ -1,22 +1,24 @@
-"""Build the static bilingual TEE / TDX / SGX atlas (stdlib only)."""
+"""Build the static bilingual TEE atlas (stdlib only)."""
 from pathlib import Path
 from diagram_core import arrow, flow as diagram_flow, frame, node, tr
 from diagrams import TDISP_SPEC, TDX_CONNECT_ARCH, diagram
 from intel_figures import BASE, MIGRATION, SGX_DCAP, SGX_MP, SGX_SDM, intel_figure, sgx_figure
 
+from sev import sev_page
+
 ROOT = Path(__file__).parent
-PAGES = ('index', 'sgx', 'tdx', 'labs')
+PAGES = ('index', 'sgx', 'tdx', 'sev', 'labs')
 NAV = {
-    'en': ('Overview', 'Intel SGX', 'Intel TDX', 'Labs & sources'),
-    'zh': ('总览', 'Intel SGX', 'Intel TDX', '实验与资料'),
+    'en': ('Overview', 'Intel SGX', 'Intel TDX', 'AMD SEV', 'Labs & sources'),
+    'zh': ('总览', 'Intel SGX', 'Intel TDX', 'AMD SEV', '实验与资料'),
 }
 TITLES = {
-    'en': ('TEE / TDX / SGX Atlas', 'Intel SGX architecture & instructions', 'Intel TDX architecture & calls', 'Hardware labs & primary sources'),
-    'zh': ('TEE / TDX / SGX 地图', 'Intel SGX 原理与指令', 'Intel TDX 原理与调用', '硬件实验与一手资料'),
+    'en': ('TEE Atlas', 'Intel SGX architecture & instructions', 'Intel TDX architecture & calls', 'AMD SEV and SEV-SNP architecture', 'Hardware labs & primary sources'),
+    'zh': ('TEE 学习地图', 'Intel SGX 原理与指令', 'Intel TDX 原理与调用', 'AMD SEV 与 SEV-SNP 架构', '硬件实验与一手资料'),
 }
 DESCRIPTIONS = {
-    'en': 'A focused guide to Intel SGX and TDX architecture, hardware support, SGX instructions, TDCALL and SEAMCALL.',
-    'zh': '聚焦 Intel SGX 与 TDX 的架构、硬件支持、SGX 指令、TDCALL 和 SEAMCALL。',
+    'en': 'An architecture guide to Intel SGX, Intel TDX and AMD SEV, including memory isolation, attestation and trusted I/O.',
+    'zh': '介绍 Intel SGX、Intel TDX 和 AMD SEV 的架构、内存隔离、远程证明与可信 I/O。',
 }
 
 
@@ -44,11 +46,11 @@ def shell(lang, page, body):
     en_current = '' if zh else 'aria-current="page" '
     zh_current = 'aria-current="page" ' if zh else ''
     languages = f'<nav class="langbar" aria-label="{lang_label}"><a data-atlas-lang="en" {en_current}href="{page}.html">EN</a><a data-atlas-lang="zh" {zh_current}href="{page}.zh.html">中文</a></nav>'
-    foot = ('聚焦 SGX 与 TDX 的硬件和软件机制。功能支持及指令接口以具体处理器、模块和系统版本为准。' if zh else 'A focused SGX and TDX field guide. Check processor, module and OS versions for actual feature and ABI support.')
+    foot = ('Intel SGX、Intel TDX 与 AMD SEV 的硬件和软件机制。功能支持及指令接口以具体处理器、模块和系统版本为准。' if zh else 'An architecture guide to Intel SGX, Intel TDX and AMD SEV. Check processor, module and OS versions for actual feature and ABI support.')
     return f'''<!doctype html>
 <html lang="{'zh-CN' if zh else 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101b2a"><meta name="description" content="{DESCRIPTIONS[lang]}"><title>{TITLES[lang][idx]} · ShundaZhang</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="diagrams.css"><script src="language.js"></script></head>
-<body>{languages}<a class="skip" href="#main">{'跳至正文' if zh else 'Skip to content'}</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="index{suffix}"><span class="brand-mark">T//</span><span class="brand-name">TEE / TDX / SGX ATLAS</span></a><nav class="nav" aria-label="{'主导航' if zh else 'Main navigation'}">{nav}</nav></div></header>
-<main id="main">{body}</main><footer class="footer"><div class="wrap footer-inner"><div><strong>TEE / TDX / SGX ATLAS</strong><p>{foot}</p></div><div><a href="https://shundazhang.github.io/">{'个人主页' if zh else 'Home'}</a><a href="https://github.com/ShundaZhang/tee-tdx-sgx">GitHub ↗</a></div></div></footer></body></html>'''
+<body>{languages}<a class="skip" href="#main">{'跳至正文' if zh else 'Skip to content'}</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="index{suffix}"><span class="brand-mark">T//</span><span class="brand-name">TEE ATLAS</span></a><nav class="nav" aria-label="{'主导航' if zh else 'Main navigation'}">{nav}</nav></div></header>
+<main id="main">{body}</main><footer class="footer"><div class="wrap footer-inner"><div><strong>TEE ATLAS</strong><p>{foot}</p></div><div><a href="https://shundazhang.github.io/">{'个人主页' if zh else 'Home'}</a><a href="https://github.com/ShundaZhang/tee-tdx-sgx">GitHub ↗</a></div></div></footer></body></html>'''
 
 
 def section(label, title, intro, content, tone='', section_id=''):
@@ -76,18 +78,19 @@ def table(headers, rows):
 
 
 def index_en():
-    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">INTEL CONFIDENTIAL COMPUTING / HARDWARE FIELD GUIDE</span><h1>Understand SGX<br><em>and TDX from the CPU up</em></h1><p>Two independent mechanisms to learn on their own terms: SGX protects an enclave inside a process; TDX protects a guest VM. Start with supported hardware, memory structures, entry and exit, and the instructions each mechanism exposes.</p><div class="buttons"><a class="button primary" href="sgx.html">Explore SGX ↗</a><a class="button ghost" href="tdx.html">Explore TDX ↗</a></div><div class="hero-note">ARCHITECTURE → INSTRUCTIONS → SOFTWARE STACK → HANDS-ON CHECKS</div></div><div class="boundary-visual" role="img" aria-label="An untrusted host surrounds an SGX process enclave and a TDX virtual machine, with different CPU instruction paths"><div class="visual-head"><span>CPU ISOLATION / TWO MODELS</span><span>SGX ≠ TDX</span></div><div class="host-box"><span>HOST APPLICATION / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>PROCESS-LEVEL</small><b>SGX</b><p>EPC + EPCM<br>ENCLS / ENCLU</p></div><div class="protect-box"><small>VM-LEVEL</small><b>TDX</b><p>SEAM + SEPT + PAMT<br>TDCALL / SEAMCALL</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>PRIVATE MEMORY ≠ SHARED I/O</span><strong>CPU</strong></div></div></div></section>'''
-    cards = '<div class="card-grid">' + ''.join([
+    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">CONFIDENTIAL COMPUTING / HARDWARE FIELD GUIDE</span><h1>Understand TEEs<br><em>from the CPU up</em></h1><p>Study Intel SGX for process enclaves and Intel TDX or AMD SEV-SNP for confidential VMs. Follow how each platform protects memory, exposes calls and produces attestation evidence.</p><div class="buttons"><a class="button primary" href="sgx.html">Explore SGX ↗</a><a class="button ghost" href="tdx.html">Explore TDX ↗</a><a class="button ghost" href="sev.html">Explore AMD SEV ↗</a></div><div class="hero-note">ARCHITECTURE → INSTRUCTIONS → SOFTWARE STACK → HANDS-ON CHECKS</div></div><div class="boundary-visual" role="img" aria-label="An untrusted host surrounds an SGX process enclave and Intel TDX and AMD SEV-SNP confidential virtual machines"><div class="visual-head"><span>CPU ISOLATION</span><span>PROCESS / VM</span></div><div class="host-box"><span>HOST APPLICATION / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>PROCESS-LEVEL</small><b>SGX</b><p>EPC + EPCM<br>ENCLS / ENCLU</p></div><div class="protect-box"><small>VM-LEVEL</small><b>TDX</b><p>SEAM + SEPT + PAMT<br>TDCALL / SEAMCALL</p></div><div class="protect-box"><small>VM-LEVEL</small><b>SEV-SNP</b><p>AMD-SP + RMP<br>GHCB / VMGEXIT</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>PRIVATE MEMORY ≠ SHARED I/O</span><strong>CPU</strong></div></div></div></section>'''
+    cards = '<div class="card-grid platform-grid">' + ''.join([
         card('01 / ENCLAVE', 'Intel SGX', 'Follow how enclave pages are built and measured, why EPCM checks matter, and how EENTER, EEXIT and AEX change execution.', 'sgx.html', 'Study SGX'),
         card('02 / TRUST DOMAIN', 'Intel TDX', 'Follow a TD from host creation through guest entry, private page acceptance and exits. Separate TDCALL from SEAMCALL and TDVMCALL.', 'tdx.html', 'Study TDX'),
-        card('03 / PRACTICE', 'Hardware and software stack', 'Check CPU model, firmware enablement, Linux interfaces, module version and samples before assuming either feature is usable.', 'labs.html', 'Open the lab guide')
+        card('03 / CONFIDENTIAL VM', 'AMD SEV', 'Follow encrypted VM state, RMP validation, SNP attestation, trusted I/O and migration.', 'sev.html', 'Study AMD SEV'),
+        card('04 / PRACTICE', 'Hardware and software stack', 'Check CPU model, firmware enablement, Linux interfaces, module version and samples before deploying a confidential workload.', 'labs.html', 'Open the lab guide')
     ]) + '</div>'
-    compare = table(('Question', 'SGX', 'TDX'), [
-        ('Protected unit', 'Enclave within a process', 'Trust Domain: a confidential VM'),
-        ('Primary CPU structures', 'EPC pages, EPCM metadata, SECS and TCS', 'SEAM/TDX module, Secure EPT, PAMT and private KeyIDs'),
-        ('Main call boundary', 'ENCLS by privileged software; ENCLU by user/enclave code', 'SEAMCALL by host; TDCALL by guest TD'),
-        ('Memory outside boundary', 'Ordinary process memory is untrusted to the enclave', 'Shared guest pages and device I/O remain visible to the host'),
-        ('Software integration', 'Partition code or use an enclave runtime', 'Run a TD-aware guest OS and VMM stack')
+    compare = table(('Question', 'SGX', 'TDX', 'SEV-SNP'), [
+        ('Protected unit', 'Enclave within a process', 'Trust Domain: a confidential VM', 'SNP confidential VM'),
+        ('Primary CPU structures', 'EPC pages, EPCM metadata, SECS and TCS', 'SEAM/TDX module, Secure EPT, PAMT and private KeyIDs', 'AMD-SP, VMSA, NPT and RMP'),
+        ('Main call boundary', 'ENCLS by privileged software; ENCLU by user/enclave code', 'SEAMCALL by host; TDCALL by guest TD', 'AMD-SP firmware commands and guest GHCB / VMGEXIT'),
+        ('Memory outside boundary', 'Ordinary process memory is untrusted to the enclave', 'Shared guest pages and device I/O remain visible to the host', 'Shared guest pages are outside the SNP private boundary'),
+        ('Software integration', 'Partition code or use an enclave runtime', 'Run a TD-aware guest OS and VMM stack', 'Run an SNP-aware guest OS and VMM stack')
     ])
     path = '<div class="route">' + ''.join([
         route('01', 'Check the platform', 'Distinguish CPU support, firmware enablement, OS driver and actual usable device nodes.', 'labs.html#hardware', 'Run support checks'),
@@ -95,25 +98,27 @@ def index_en():
         route('03', 'Read SGX instruction flow', 'Follow ECREATE → EADD/EEXTEND → EINIT → EENTER/EEXIT and AEX/ERESUME.', 'sgx.html#instructions', 'Open SGX instruction map'),
         route('04', 'Trace TDX memory', 'Understand SEAM, private KeyIDs, PAMT, Secure EPT and private/shared pages.', 'tdx.html#memory', 'Open TDX memory model'),
         route('05', 'Read TDX call flow', 'Follow host SEAMCALLs and guest TDCALLs, including TDG.VP.VMCALL.', 'tdx.html#calls', 'Open TDX call map'),
-        route('06', 'Revisit in source', 'Map each architectural step to Linux KVM, guest code, Intel specs and a reproducible lab.', 'labs.html#sources', 'Open primary sources')
+        route('06', 'Follow SNP attestation', 'Trace how the AMD-SP signs evidence and how a remote verifier checks it.', 'sev.html#attestation', 'Open SNP attestation'),
+        route('07', 'Revisit in source', 'Map each architectural step to Linux KVM, guest code, Intel specs and a reproducible lab.', 'labs.html#sources', 'Open primary sources')
     ]) + '</div>'
-    brief = '<div class="signal"><strong>Remote attestation in one paragraph</strong>SGX and TDX can produce measured reports and remote quotes. A remote verifier checks the evidence against a policy before an application trusts the environment. <a class="inline-link" href="tdx.html#remote-attestation">Trace the TDX attestation architecture ↗</a></div>'
-    return hero + section('01 / THE TWO MECHANISMS', 'Learn each boundary on its own terms', 'SGX and TDX solve different isolation problems. The pages below go into the CPU mechanisms, not a single unified deployment story.', cards, 'white') + section('02 / ARCHITECTURE MAP', 'The important differences at a glance', 'Use this as a map before reading the instruction tables.', compare) + section('03 / LEARNING ROUTE', 'Six concrete steps', 'The route assumes familiarity with x86, virtual memory and virtualization; it goes straight to the new mechanisms.', path, 'tinted') + section('04 / BRIEF CONTEXT', 'Where attestation fits', 'A small bridge from local isolation to remote use, without making it the center of this site.', brief, 'white', 'attestation')
+    brief = '<div class="signal"><strong>Remote attestation in one paragraph</strong>SGX, TDX and SEV-SNP produce attestation evidence for a verifier. A remote verifier checks the evidence against a policy before an application trusts the environment. <a class="inline-link" href="tdx.html#remote-attestation">Trace the TDX attestation architecture ↗</a></div>'
+    return hero + section('PLATFORM GUIDES', 'Choose a platform', 'Read each platform’s hardware, trust boundary and software interfaces.', cards, 'white') + section('02 / ARCHITECTURE MAP', 'The important differences at a glance', 'Use this as a map before reading the instruction tables.', compare) + section('03 / LEARNING ROUTE', 'A reading path for each platform', 'The route assumes familiarity with x86, virtual memory and virtualization; it goes straight to the new mechanisms.', path, 'tinted') + section('04 / BRIEF CONTEXT', 'Where attestation fits', 'A small bridge from local isolation to remote use, without making it the center of this site.', brief, 'white', 'attestation')
 
 
 def index_zh():
-    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">INTEL CONFIDENTIAL COMPUTING / HARDWARE FIELD GUIDE</span><h1>从 CPU 出发<br><em>读懂 SGX 与 TDX</em></h1><p>把两项机制分别学清楚：SGX 保护进程中的 enclave，TDX 保护一个 Guest VM。先看硬件支持、内存结构、进入与退出，再读各自暴露的指令和调用。</p><div class="buttons"><a class="button primary" href="sgx.zh.html">学习 SGX ↗</a><a class="button ghost" href="tdx.zh.html">学习 TDX ↗</a></div><div class="hero-note">架构 → 指令 → 软件栈 → 动手检查</div></div><div class="boundary-visual" role="img" aria-label="不可信宿主包含 SGX enclave 与 TDX 虚拟机，两者有不同 CPU 指令路径"><div class="visual-head"><span>CPU ISOLATION / TWO MODELS</span><span>SGX ≠ TDX</span></div><div class="host-box"><span>宿主应用 / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>进程级</small><b>SGX</b><p>EPC + EPCM<br>ENCLS / ENCLU</p></div><div class="protect-box"><small>虚拟机级</small><b>TDX</b><p>SEAM + SEPT + PAMT<br>TDCALL / SEAMCALL</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>私有内存 ≠ 共享 I/O</span><strong>CPU</strong></div></div></div></section>'''
-    cards = '<div class="card-grid">' + ''.join([
+    hero = '''<section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">CONFIDENTIAL COMPUTING / HARDWARE FIELD GUIDE</span><h1>从 CPU 出发<br><em>读懂可信执行环境</em></h1><p>Intel SGX 保护进程中的 enclave，Intel TDX 和 AMD SEV-SNP 保护机密虚拟机。分别学习各平台如何隔离内存、处理调用和生成证明。</p><div class="buttons"><a class="button primary" href="sgx.zh.html">学习 SGX ↗</a><a class="button ghost" href="tdx.zh.html">学习 TDX ↗</a><a class="button ghost" href="sev.zh.html">学习 AMD SEV ↗</a></div><div class="hero-note">架构 → 指令 → 软件栈 → 动手检查</div></div><div class="boundary-visual" role="img" aria-label="不可信宿主运行 SGX enclave、Intel TDX 和 AMD SEV-SNP 机密虚拟机"><div class="visual-head"><span>CPU ISOLATION</span><span>PROCESS / VM</span></div><div class="host-box"><span>宿主应用 / OS / VMM</span><div class="protected-row"><div class="protect-box"><small>进程级</small><b>SGX</b><p>EPC + EPCM<br>ENCLS / ENCLU</p></div><div class="protect-box"><small>虚拟机级</small><b>TDX</b><p>SEAM + SEPT + PAMT<br>TDCALL / SEAMCALL</p></div><div class="protect-box"><small>虚拟机级</small><b>SEV-SNP</b><p>AMD-SP + RMP<br>GHCB / VMGEXIT</p></div></div></div><div class="visual-connector"></div><div class="verifier-box"><span>私有内存 ≠ 共享 I/O</span><strong>CPU</strong></div></div></div></section>'''
+    cards = '<div class="card-grid platform-grid">' + ''.join([
         card('01 / ENCLAVE', 'Intel SGX', '跟随 enclave 页面构建与测量，理解 EPCM 检查，以及 EENTER、EEXIT 和 AEX 如何改变执行。', 'sgx.zh.html', '学习 SGX'),
         card('02 / TRUST DOMAIN', 'Intel TDX', '跟随 TD 从宿主创建到 Guest 进入、私有页接受与退出；分清 TDCALL、SEAMCALL 和 TDVMCALL。', 'tdx.zh.html', '学习 TDX'),
-        card('03 / 实践', '硬件与软件栈', '核对 CPU 型号、固件开关、Linux 接口、模块版本与样例，再判断功能是否真的可用。', 'labs.zh.html', '打开实验指南')
+        card('03 / 机密虚拟机', 'AMD SEV', '追踪加密 VM 状态、RMP 验证、SNP 证明、可信 I/O 与迁移。', 'sev.zh.html', '学习 AMD SEV'),
+        card('04 / 实践', '硬件与软件栈', '核对 CPU 型号、固件开关、Linux 接口、模块版本与样例，再判断功能是否真的可用。', 'labs.zh.html', '打开实验指南')
     ]) + '</div>'
-    compare = table(('问题', 'SGX', 'TDX'), [
-        ('保护对象', '进程中的 enclave', 'Trust Domain：机密虚拟机'),
-        ('主要 CPU 结构', 'EPC 页面、EPCM 元数据、SECS 与 TCS', 'SEAM/TDX 模块、Secure EPT、PAMT 与私有 KeyID'),
-        ('主要调用边界', '特权软件用 ENCLS；用户态/enclave 用 ENCLU', '宿主用 SEAMCALL；Guest TD 用 TDCALL'),
-        ('边界外内存', '普通进程内存对 enclave 不可信', 'Guest 共享页与设备 I/O 对宿主可见'),
-        ('软件接入', '拆分代码或使用 enclave 运行时', '使用支持 TD 的 Guest OS 与 VMM 软件栈')
+    compare = table(('问题', 'SGX', 'TDX', 'SEV-SNP'), [
+        ('保护对象', '进程中的 enclave', 'Trust Domain：机密虚拟机', 'SNP 机密虚拟机'),
+        ('主要 CPU 结构', 'EPC 页面、EPCM 元数据、SECS 与 TCS', 'SEAM/TDX 模块、Secure EPT、PAMT 与私有 KeyID', 'AMD-SP、VMSA、NPT 与 RMP'),
+        ('主要调用边界', '特权软件用 ENCLS；用户态/enclave 用 ENCLU', '宿主用 SEAMCALL；Guest TD 用 TDCALL', 'AMD-SP 固件命令与 Guest GHCB / VMGEXIT'),
+        ('边界外内存', '普通进程内存对 enclave 不可信', 'Guest 共享页与设备 I/O 对宿主可见', 'Guest 共享页位于 SNP 私有边界之外'),
+        ('软件接入', '拆分代码或使用 enclave 运行时', '使用支持 TD 的 Guest OS 与 VMM 软件栈', '使用支持 SNP 的 Guest OS 与 VMM 软件栈')
     ])
     path = '<div class="route">' + ''.join([
         route('01', '先检查平台', '分开核对 CPU 支持、固件开关、OS 驱动和可用的设备节点。', 'labs.zh.html#hardware', '运行支持检查'),
@@ -121,10 +126,11 @@ def index_zh():
         route('03', '读 SGX 指令路径', '跟随 ECREATE → EADD/EEXTEND → EINIT → EENTER/EEXIT 及 AEX/ERESUME。', 'sgx.zh.html#instructions', '看 SGX 指令地图'),
         route('04', '追踪 TDX 内存', '理解 SEAM、私有 KeyID、PAMT、Secure EPT 与私有/共享页。', 'tdx.zh.html#memory', '看 TDX 内存模型'),
         route('05', '读 TDX 调用路径', '跟随宿主 SEAMCALL 与 Guest TDCALL，包括 TDG.VP.VMCALL。', 'tdx.zh.html#calls', '看 TDX 调用地图'),
-        route('06', '回到源码', '把每一步对应到 Linux KVM、Guest 代码、Intel 规范与可复现实验。', 'labs.zh.html#sources', '打开一手资料')
+        route('06', '追踪 SNP 证明', '理解 AMD-SP 如何签署证据，以及远程验证者如何检查报告。', 'sev.zh.html#attestation', '看 SNP 远程证明'),
+        route('07', '回到源码', '把每一步对应到 Linux KVM、Guest 代码、Intel 规范与可复现实验。', 'labs.zh.html#sources', '打开一手资料')
     ]) + '</div>'
-    brief = '<div class="signal"><strong>用一段话定位远程证明</strong>SGX 与 TDX 可产生包含度量信息的报告和 Quote。远程验证者按策略检查证据，应用据此决定是否信任该环境。<a class="inline-link" href="tdx.zh.html#remote-attestation">查看 TDX 远程证明架构 ↗</a></div>'
-    return hero + section('01 / 两项机制', '分别学清各自的边界', 'SGX 与 TDX 解决不同隔离问题。下面的章节深入 CPU 机制，不把它们强行塞进一条部署故事。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '六个具体步骤', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
+    brief = '<div class="signal"><strong>用一段话定位远程证明</strong>SGX、TDX 与 SEV-SNP 可生成包含度量信息的证明证据。远程验证者按策略检查证据，应用据此决定是否信任该环境。<a class="inline-link" href="tdx.zh.html#remote-attestation">查看 TDX 远程证明架构 ↗</a></div>'
+    return hero + section('平台导读', '选择一个平台', '分别阅读各平台的硬件、信任边界和软件接口。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '从硬件到证明的学习路径', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
 
 
 def sgx_contents(lang):
@@ -751,6 +757,7 @@ def tdx_en():
         + tdx_service('en')
         + tdx_attestation('en')
         + tdx_migration('en')
+        + sev_cross_reference('en')
     )
 
 
@@ -798,7 +805,29 @@ def tdx_zh():
         + tdx_service('zh')
         + tdx_attestation('zh')
         + tdx_migration('zh')
+        + sev_cross_reference('zh')
     )
+
+
+def sev_cross_reference(lang):
+    suffix = tr(lang, '.html', '.zh.html')
+    return article(
+        tr(lang, 'AMD SEV-SNP', 'AMD SEV-SNP'),
+        tr(lang, 'Compare TDX with AMD SEV-SNP', '对照 TDX 与 AMD SEV-SNP'),
+        tr(lang, 'Compare page ownership, startup and trust chains, attestation, trusted I/O and migration.',
+                 '逐项比较页面所有权、启动与信任链、远程证明、可信 I/O 和迁移。'),
+        f'<p><a class="inline-link" href="sev{suffix}#tdx-comparison">'
+        + tr(lang, 'Open the SEV-SNP and TDX comparison ↗', '打开 SEV-SNP 与 TDX 对照 ↗') + '</a></p>',
+        'sev-comparison',
+    )
+
+
+def sev_en():
+    return sev_page('en', page_hero=page_hero, article=article, table=table, link=link)
+
+
+def sev_zh():
+    return sev_page('zh', page_hero=page_hero, article=article, table=table, link=link)
 
 
 def labs_en():
