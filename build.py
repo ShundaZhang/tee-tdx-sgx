@@ -1,5 +1,7 @@
 """Build the static bilingual TEE atlas (stdlib only)."""
 from pathlib import Path
+
+from coco import coco_page
 from diagram_core import arrow, flow as diagram_flow, frame, node, tr
 from diagrams import TDISP_SPEC, TDX_CONNECT_ARCH, diagram
 from intel_figures import BASE, MIGRATION, SGX_DCAP, SGX_MP, SGX_SDM, intel_figure, sgx_figure
@@ -7,18 +9,18 @@ from intel_figures import BASE, MIGRATION, SGX_DCAP, SGX_MP, SGX_SDM, intel_figu
 from sev import sev_page
 
 ROOT = Path(__file__).parent
-PAGES = ('index', 'sgx', 'tdx', 'sev', 'labs')
+PAGES = ('index', 'sgx', 'tdx', 'sev', 'coco', 'labs')
 NAV = {
-    'en': ('Overview', 'Intel SGX', 'Intel TDX', 'AMD SEV', 'Labs & sources'),
-    'zh': ('总览', 'Intel SGX', 'Intel TDX', 'AMD SEV', '实验与资料'),
+    'en': ('Overview', 'Intel SGX', 'Intel TDX', 'AMD SEV', 'Confidential Containers', 'Labs & sources'),
+    'zh': ('总览', 'Intel SGX', 'Intel TDX', 'AMD SEV', '机密容器', '实验与资料'),
 }
 TITLES = {
-    'en': ('TEE Atlas', 'Intel SGX architecture & instructions', 'Intel TDX architecture & calls', 'AMD SEV and SEV-SNP architecture', 'Hardware labs & primary sources'),
-    'zh': ('TEE 学习地图', 'Intel SGX 原理与指令', 'Intel TDX 原理与调用', 'AMD SEV 与 SEV-SNP 架构', '硬件实验与一手资料'),
+    'en': ('TEE Atlas', 'Intel SGX architecture & instructions', 'Intel TDX architecture & calls', 'AMD SEV and SEV-SNP architecture', 'Confidential Containers (CoCo)', 'Hardware labs & primary sources'),
+    'zh': ('TEE 学习地图', 'Intel SGX 原理与指令', 'Intel TDX 原理与调用', 'AMD SEV 与 SEV-SNP 架构', '机密容器（CoCo）', '硬件实验与一手资料'),
 }
 DESCRIPTIONS = {
-    'en': 'An architecture guide to Intel SGX, Intel TDX and AMD SEV, including memory isolation, attestation and trusted I/O.',
-    'zh': '介绍 Intel SGX、Intel TDX 和 AMD SEV 的架构、内存隔离、远程证明与可信 I/O。',
+    'en': 'An architecture guide to Intel SGX, Intel TDX and AMD SEV, and the CoCo stack for running confidential Kubernetes workloads.',
+    'zh': '介绍 Intel SGX、Intel TDX 和 AMD SEV 的架构，以及 CoCo 机密容器的信任模型、远程证明和实现。',
 }
 
 
@@ -83,7 +85,7 @@ def index_en():
         card('01 / ENCLAVE', 'Intel SGX', 'Follow how enclave pages are built and measured, why EPCM checks matter, and how EENTER, EEXIT and AEX change execution.', 'sgx.html', 'Study SGX'),
         card('02 / TRUST DOMAIN', 'Intel TDX', 'Follow a TD from host creation through guest entry, private page acceptance and exits. Separate TDCALL from SEAMCALL and TDVMCALL.', 'tdx.html', 'Study TDX'),
         card('03 / CONFIDENTIAL VM', 'AMD SEV', 'Follow encrypted VM state, RMP validation, SNP attestation, trusted I/O and migration.', 'sev.html', 'Study AMD SEV'),
-        card('04 / PRACTICE', 'Hardware and software stack', 'Check CPU model, firmware enablement, Linux interfaces, module version and samples before deploying a confidential workload.', 'labs.html', 'Open the lab guide')
+        card('04 / WORKLOAD', 'Confidential Containers', 'Follow a Kubernetes Pod into a confidential VM and trace how CoCo verifies the guest and authorizes image keys.', 'coco.html', 'Study CoCo')
     ]) + '</div>'
     compare = table(('Question', 'SGX', 'TDX', 'SEV-SNP'), [
         ('Protected unit', 'Enclave within a process', 'Trust Domain: a confidential VM', 'SNP confidential VM'),
@@ -99,10 +101,11 @@ def index_en():
         route('04', 'Trace TDX memory', 'Understand SEAM, private KeyIDs, PAMT, Secure EPT and private/shared pages.', 'tdx.html#memory', 'Open TDX memory model'),
         route('05', 'Read TDX call flow', 'Follow host SEAMCALLs and guest TDCALLs, including TDG.VP.VMCALL.', 'tdx.html#calls', 'Open TDX call map'),
         route('06', 'Follow SNP attestation', 'Trace how the AMD-SP signs evidence and how a remote verifier checks it.', 'sev.html#attestation', 'Open SNP attestation'),
-        route('07', 'Revisit in source', 'Map each architectural step to Linux KVM, guest code, Intel specs and a reproducible lab.', 'labs.html#sources', 'Open primary sources')
+        route('07', 'Follow a confidential Pod', 'Trace Kubernetes, Kata and Trustee from sandbox creation to secret delivery.', 'coco.html#pod-launch', 'Open CoCo implementation'),
+        route('08', 'Revisit in source', 'Map each architectural step to Linux KVM, guest code, Intel specs and a reproducible lab.', 'labs.html#sources', 'Open primary sources')
     ]) + '</div>'
     brief = '<div class="signal"><strong>Remote attestation in one paragraph</strong>SGX, TDX and SEV-SNP produce attestation evidence for a verifier. A remote verifier checks the evidence against a policy before an application trusts the environment. <a class="inline-link" href="tdx.html#remote-attestation">Trace the TDX attestation architecture ↗</a></div>'
-    return hero + section('PLATFORM GUIDES', 'Choose a platform', 'Read each platform’s hardware, trust boundary and software interfaces.', cards, 'white') + section('02 / ARCHITECTURE MAP', 'The important differences at a glance', 'Use this as a map before reading the instruction tables.', compare) + section('03 / LEARNING ROUTE', 'A reading path for each platform', 'The route assumes familiarity with x86, virtual memory and virtualization; it goes straight to the new mechanisms.', path, 'tinted') + section('04 / BRIEF CONTEXT', 'Where attestation fits', 'A small bridge from local isolation to remote use, without making it the center of this site.', brief, 'white', 'attestation')
+    return hero + section('TEE GUIDES', 'Hardware and workloads', 'Study the isolation mechanisms and how CoCo uses them to run Kubernetes workloads.', cards, 'white') + section('02 / ARCHITECTURE MAP', 'The important differences at a glance', 'Use this as a map before reading the instruction tables.', compare) + section('03 / LEARNING ROUTE', 'A reading path for each platform', 'The route assumes familiarity with x86, virtual memory and virtualization; it goes straight to the new mechanisms.', path, 'tinted') + section('04 / BRIEF CONTEXT', 'Where attestation fits', 'A small bridge from local isolation to remote use, without making it the center of this site.', brief, 'white', 'attestation')
 
 
 def index_zh():
@@ -111,7 +114,7 @@ def index_zh():
         card('01 / ENCLAVE', 'Intel SGX', '跟随 enclave 页面构建与测量，理解 EPCM 检查，以及 EENTER、EEXIT 和 AEX 如何改变执行。', 'sgx.zh.html', '学习 SGX'),
         card('02 / TRUST DOMAIN', 'Intel TDX', '跟随 TD 从宿主创建到 Guest 进入、私有页接受与退出；分清 TDCALL、SEAMCALL 和 TDVMCALL。', 'tdx.zh.html', '学习 TDX'),
         card('03 / 机密虚拟机', 'AMD SEV', '追踪加密 VM 状态、RMP 验证、SNP 证明、可信 I/O 与迁移。', 'sev.zh.html', '学习 AMD SEV'),
-        card('04 / 实践', '硬件与软件栈', '核对 CPU 型号、固件开关、Linux 接口、模块版本与样例，再判断功能是否真的可用。', 'labs.zh.html', '打开实验指南')
+        card('04 / 工作负载', '机密容器', '跟踪 Kubernetes Pod 如何进入机密 VM，以及 CoCo 如何验证 Guest 并授权镜像密钥。', 'coco.zh.html', '学习 CoCo')
     ]) + '</div>'
     compare = table(('问题', 'SGX', 'TDX', 'SEV-SNP'), [
         ('保护对象', '进程中的 enclave', 'Trust Domain：机密虚拟机', 'SNP 机密虚拟机'),
@@ -127,10 +130,11 @@ def index_zh():
         route('04', '追踪 TDX 内存', '理解 SEAM、私有 KeyID、PAMT、Secure EPT 与私有/共享页。', 'tdx.zh.html#memory', '看 TDX 内存模型'),
         route('05', '读 TDX 调用路径', '跟随宿主 SEAMCALL 与 Guest TDCALL，包括 TDG.VP.VMCALL。', 'tdx.zh.html#calls', '看 TDX 调用地图'),
         route('06', '追踪 SNP 证明', '理解 AMD-SP 如何签署证据，以及远程验证者如何检查报告。', 'sev.zh.html#attestation', '看 SNP 远程证明'),
-        route('07', '回到源码', '把每一步对应到 Linux KVM、Guest 代码、Intel 规范与可复现实验。', 'labs.zh.html#sources', '打开一手资料')
+        route('07', '跟踪机密 Pod', '从沙箱创建到发放秘密，追踪 Kubernetes、Kata 与 Trustee 的实现。', 'coco.zh.html#pod-launch', '看 CoCo 实现'),
+        route('08', '回到源码', '把每一步对应到 Linux KVM、Guest 代码、Intel 规范与可复现实验。', 'labs.zh.html#sources', '打开一手资料')
     ]) + '</div>'
     brief = '<div class="signal"><strong>用一段话定位远程证明</strong>SGX、TDX 与 SEV-SNP 可生成包含度量信息的证明证据。远程验证者按策略检查证据，应用据此决定是否信任该环境。<a class="inline-link" href="tdx.zh.html#remote-attestation">查看 TDX 远程证明架构 ↗</a></div>'
-    return hero + section('平台导读', '选择一个平台', '分别阅读各平台的硬件、信任边界和软件接口。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '从硬件到证明的学习路径', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
+    return hero + section('专题导读', 'TEE 硬件与工作负载', '了解硬件隔离机制，以及 CoCo 如何用它们运行 Kubernetes 工作负载。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '从硬件到证明的学习路径', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
 
 
 def sgx_contents(lang):
@@ -828,6 +832,14 @@ def sev_en():
 
 def sev_zh():
     return sev_page('zh', page_hero=page_hero, article=article, table=table, link=link)
+
+
+def coco_en():
+    return coco_page('en', page_hero=page_hero, article=article, table=table, link=link)
+
+
+def coco_zh():
+    return coco_page('zh', page_hero=page_hero, article=article, table=table, link=link)
 
 
 def labs_en():
