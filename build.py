@@ -2,7 +2,7 @@
 from pathlib import Path
 from diagram_core import arrow, flow as diagram_flow, frame, node, tr
 from diagrams import TDISP_SPEC, TDX_CONNECT_ARCH, diagram
-from intel_figures import BASE, MIGRATION, intel_figure
+from intel_figures import BASE, MIGRATION, SGX_DCAP, SGX_MP, SGX_SDM, intel_figure, sgx_figure
 
 ROOT = Path(__file__).parent
 PAGES = ('index', 'sgx', 'tdx', 'labs')
@@ -127,6 +127,259 @@ def index_zh():
     return hero + section('01 / 两项机制', '分别学清各自的边界', 'SGX 与 TDX 解决不同隔离问题。下面的章节深入 CPU 机制，不把它们强行塞进一条部署故事。', cards, 'white') + section('02 / 架构地图', '先看重要差异', '读指令表前，先用它建立坐标。', compare) + section('03 / 学习路径', '六个具体步骤', '假设你已有 x86、虚拟内存和虚拟化基础，直接进入新增机制。', path, 'tinted') + section('04 / 简要背景', '远程证明在什么位置', '只交代本地隔离如何延伸到远端使用，不让它占据此站主线。', brief, 'white', 'attestation')
 
 
+def sgx_contents(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    topics = (
+        ('architecture', t('Architecture', '整体架构')),
+        ('hardware', t('Platform support', '平台支持')),
+        ('memory', t('Memory', '内存模型')),
+        ('instructions', t('Ring 0 and Ring 3', 'Ring 0 与 Ring 3')),
+        ('flow', t('Call paths', '调用过程')),
+        ('local-attestation', t('Local attestation', '本地证明')),
+        ('remote-attestation', t('Remote attestation', '远程证明')),
+        ('provisioning', t('AE and provisioning', 'AE 与预配')),
+        ('multi-package', t('Multi-package', '多路平台')),
+        ('applications', t('Applications', '产品实例')),
+    )
+    items = ''.join(f'<li><a href="#{ident}">{label}</a></li>' for ident, label in topics)
+    return f'<nav class="tdx-contents" aria-label="{t("SGX contents", "SGX 章节目录")}"><ul class="wrap">{items}</ul></nav>'
+
+
+def sgx_architecture(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    image = sgx_figure(lang, 'architecture', t('An enclave within a process address space', '进程地址空间中的 enclave'),
+        t('An application contains an enclave with its own code, entry table, stack and heap.',
+          '应用地址空间包含一块 enclave 区域，其中有入口表、堆、栈与代码。'),
+        t('Both application code and enclave code execute at CPL 3. The processor tracks enclave mode separately and applies additional access checks to enclave pages.',
+          '普通应用代码和 enclave 代码都运行在 CPL 3。处理器单独跟踪 enclave 模式，并对 enclave 页面执行额外的访问检查。'))
+    return article(t('ARCHITECTURE', '架构总览'), t('A protected region within a process', '进程内的受保护区域'),
+        t('The OS manages the address space and EPC resources. CPU checks restrict access to an enclave’s private pages. The enclave runtime provides controlled entry points and mediates calls to untrusted code.',
+          'OS 管理地址空间和 EPC 资源。CPU 限制对 enclave 私有页的访问。Enclave 运行时提供受控入口，并处理调用外部代码时的边界。'), image, 'architecture')
+
+
+def sgx_layout(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    return sgx_figure(lang, 'enclave-layout', t('ELRANGE, SECS and per-thread state', 'ELRANGE、SECS 与线程状态'),
+        t('SECS describes the enclave, and each thread slot has a TCS and thread data within the enclave range.',
+          'SECS 描述整个 enclave，范围内的每个线程槽有自己的 TCS 与线程数据。'),
+        t('ELRANGE is the reserved linear address range. SECS can sit outside that linear range. Each TCS identifies an entry point and points to its State Save Area (SSA).',
+          'ELRANGE 是预留的线性地址范围。SECS 可位于该范围之外。每个 TCS 指定进入位置，并指向对应的状态保存区（SSA）。'))
+
+
+def sgx_instructions(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    ring0 = table(t(('Operation', 'Representative leaves', 'What the kernel or VMM does'), ('操作', '代表性 leaf', '内核或 VMM 的工作')), [
+        (t('Build and initialize', '构建与初始化'), '<code>ECREATE</code>, <code>EADD</code>, <code>EEXTEND</code>, <code>EINIT</code>',
+         t('Create the SECS, populate EPC, measure the initial image, then validate SIGSTRUCT and complete initialization.',
+           '创建 SECS，填充 EPC 并度量初始镜像，随后校验 SIGSTRUCT，完成初始化。')),
+        (t('Page out and in', '换出与换入'), '<code>EBLOCK</code>, <code>ETRACK</code>, <code>EWB</code>, <code>ELDU</code>, <code>ELDB</code>',
+         t('Block the page, track stale translations, write an authenticated encrypted page image, and reload it as unblocked (ELDU) or blocked (ELDB).',
+           '阻止对页面的新访问，跟踪旧地址转换，换出经认证加密的页面，再通过 ELDU 以未阻塞状态换入，或通过 ELDB 以阻塞状态换入。')),
+        (t('Reclaim', '回收'), '<code>EREMOVE</code>', t('Remove an EPC page. Teardown removes child pages before their SECS.', '移除 EPC 页面。拆除时先移除子页面，再移除 SECS。')),
+        ('SGX2', '<code>EAUG</code>, <code>EMODPR</code>, <code>EMODT</code>',
+         t('Add a pending page, restrict EPCM permissions, or change the page type. The matching enclave operation accepts changes where required.',
+           '增加待接受的页面、收紧 EPCM 权限或修改页类型。需要确认时，由 enclave 执行相应的接受操作。')),
+        (t('Debug and virtualization', '调试与虚拟化'), '<code>EDBGRD</code>, <code>EDBGWR</code>, <code>ENCLV</code>',
+         t('The debug leaves access debug enclaves. ENCLV is a separate CPL 0 instruction for SGX virtualization leaves in VMX operation, subject to hardware and VMCS controls.',
+           '调试 leaf 用于访问调试 enclave。ENCLV 是独立的 CPL 0 指令，在 VMX 环境中执行 SGX 虚拟化 leaf，受硬件能力和 VMCS 控制。')),
+    ])
+    ring3 = table(t(('Execution context', 'Representative leaves', 'What the operation does'), ('执行位置', '代表性 leaf', '操作含义')), [
+        (t('Outside the enclave', 'Enclave 外'), '<code>EENTER</code>, <code>ERESUME</code>',
+         t('EENTER starts at the selected TCS entry point. ERESUME restores the interrupted execution from its saved SSA frame.',
+           'EENTER 从指定 TCS 的入口开始执行。ERESUME 从保存的 SSA 帧恢复被打断的执行。')),
+        (t('Inside the enclave', 'Enclave 内'), '<code>EEXIT</code>, <code>EREPORT</code>, <code>EGETKEY</code>',
+         t('Exit explicitly, produce a target-bound local REPORT, or derive an authorized key such as a report or sealing key.',
+           '主动退出、生成绑定目标的本地 REPORT，或派生有权获得的密钥，例如报告密钥或封存密钥。')),
+        ('SGX2 · ' + t('inside the enclave', 'Enclave 内'), '<code>EACCEPT</code>, <code>EACCEPTCOPY</code>, <code>EMODPE</code>',
+         t('Accept pending pages or changes, accept a pending page with a copy, or extend EPCM permissions. OS page permissions still apply.',
+           '接受待处理页面或变更、复制内容并接受待处理页面，或扩展 EPCM 权限。OS 页表权限仍然生效。')),
+        ('AEX-Notify · ' + t('inside the enclave', 'Enclave 内'), '<code>EDECCSSA</code>',
+         t('On supported platforms, decrements TCS.CSSA for the enclave’s AEX notification or exception handling flow.',
+           '在支持的平台上递减 TCS.CSSA，供 enclave 的 AEX 通知或异常处理流程使用。')),
+    ])
+    image = sgx_figure(lang, 'measurement', t('How the CPU builds MRENCLAVE', 'CPU 如何构建 MRENCLAVE'),
+        t('ECREATE initializes the hash, EADD records page metadata, EEXTEND includes page chunks, and EINIT finalizes the measurement.',
+          'ECREATE 初始化哈希，EADD 记录页面元数据，EEXTEND 纳入页面内容块，EINIT 完成度量。'),
+        t('EEXTEND measures contents in 256-byte chunks. EINIT checks the signed enclave identity. MRENCLAVE identifies the measured build and MRSIGNER identifies its signer.',
+          'EEXTEND 按 256 字节分块度量内容。EINIT 检查已签名的 enclave 身份。MRENCLAVE 标识度量后的构建结果，MRSIGNER 标识签名者。'))
+    return (
+        '<h3 class="tdx-subhead">Ring 0 · ENCLS / ENCLV</h3>' + ring0
+        + '<h3 class="tdx-subhead">Ring 3 · ENCLU</h3>' + ring3
+        + '<p>' + t('The instruction selects a leaf using EAX. The leaf determines the register operands and requires the appropriate enclave context. Optional leaves depend on enumerated CPU features.',
+                    '指令通过 EAX 选择 leaf。每个 leaf 有自己的寄存器操作数和 enclave 上下文要求。可选 leaf 取决于 CPU 枚举出的能力。') + '</p>'
+        + image
+        + '<p class="source-note"><a class="inline-link" href="' + SGX_SDM + '">' + t('Intel SDM Volume 3D, Chapter 41 · SGX Instruction References', 'Intel SDM 第 3D 卷第 41 章 · SGX 指令参考') + ' ↗</a></p>'
+    )
+
+
+def sgx_call_paths(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    edge = sgx_figure(lang, 'edge-routines', t('ECALL and OCALL across the SDK boundary', 'ECALL 与 OCALL 如何跨越 SDK 边界'),
+        t('Edger8r routines connect the untrusted application and runtime to the trusted runtime and enclave code through EENTER and EEXIT.',
+          'Edger8r 生成的桥接例程，通过 EENTER 与 EEXIT 连接外部应用和运行时，以及内部运行时和 enclave 代码。'),
+        t('Read the two sides of the dashed line as separate trust domains. ECALL and OCALL are SDK call paths built around the CPU entry and exit instructions.',
+          '虚线两侧是不同的信任域。ECALL 和 OCALL 是 SDK 调用路径，由运行时配合 CPU 进入与退出指令实现。'))
+    steps = table(t(('Path', 'Execution sequence'), ('路径', '执行顺序')), [
+        ('ECALL', t('Host proxy → untrusted runtime (uRTS) → EENTER using a TCS → trusted runtime (tRTS) and bridge → enclave function → copy permitted output → EEXIT.',
+                    '宿主代理 → 非可信运行时（uRTS）→ 用 TCS 执行 EENTER → 可信运行时（tRTS）和桥接代码 → enclave 函数 → 复制允许输出的数据 → EEXIT。')),
+        ('OCALL', t('Enclave proxy marshals a request into untrusted memory → EEXIT → host callback performs I/O or a syscall → runtime re-enters with EENTER → enclave checks returned values.',
+                    'Enclave 代理将请求封装到不可信内存 → EEXIT → 宿主回调执行 I/O 或系统调用 → 运行时通过 EENTER 再进入 → enclave 校验返回值。')),
+        ('AEX / ERESUME', t('An interrupt or exception makes the CPU save state into an SSA frame and present synthetic register state outside. The OS handles the event. On the normal resume path, the AEP trampoline outside the enclave executes ERESUME to restore state.',
+                            '中断或异常触发 CPU 将状态保存到 SSA 帧，向外部呈现合成寄存器状态。OS 处理事件后，正常恢复路径由 enclave 外的 AEP 跳板执行 ERESUME，还原先前状态。')),
+    ])
+    ssa = sgx_figure(lang, 'ssa', t('SSA frames used during an asynchronous exit', '异步退出使用的 SSA 帧'),
+        t('A TCS tracks the base, number of slots and current frame index of its SSA stack.',
+          'TCS 记录对应 SSA 栈的基址、槽位数量与当前帧索引。'),
+        t('OSSA locates the SSA, NSSA counts its frames, and CSSA tracks the current frame index. AEX saves state in protected memory, and normal ERESUME consumes the saved frame.',
+          'OSSA 定位 SSA，NSSA 给出帧数，CSSA 跟踪当前帧索引。AEX 将状态保存到受保护内存，正常 ERESUME 使用保存的帧恢复执行。'))
+    return edge + steps + ssa + '<p>' + t(
+        'Read the EDL annotations <code>[in]</code>, <code>[out]</code> and <code>[size=…]</code> alongside the generated bridge. Validate lengths, copy untrusted input into enclave memory before using it, and check results after each OCALL.',
+        '结合生成的桥接代码读 EDL 的 <code>[in]</code>、<code>[out]</code>、<code>[size=…]</code>。核对长度，将不可信输入复制到 enclave 内再使用，并在每次 OCALL 后检查结果。'
+    ) + ' <a class="inline-link" href="https://github.com/intel/confidential-computing.sgx.sdk/tree/main/SampleCode/SampleEnclave">' + t('Intel SDK SampleEnclave', 'Intel SDK SampleEnclave 示例') + ' ↗</a></p>'
+
+
+def sgx_attestation(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    local = sgx_figure(lang, 'local-attestation', t('Targeted REPORT and local MAC verification', '面向目标的 REPORT 与本地 MAC 验证'),
+        t('The source uses TARGETINFO with EREPORT. The destination derives the REPORT key and verifies the MAC.',
+          '源 enclave 用目标的 TARGETINFO 执行 EREPORT，目标 enclave 派生报告密钥并验证 MAC。'),
+        t('The untrusted application can relay TARGETINFO and REPORT. The target enclave authenticates the report and applies its own identity policy.',
+          '不可信应用可以转发 TARGETINFO 和 REPORT。目标 enclave 验证报告，并按自己的策略检查源身份。'))
+    local_text = '<ol>' + ''.join(f'<li>{step}</li>' for step in [
+        t('Verifier enclave B supplies its <code>TARGETINFO</code>. Enclave A passes it and 64 bytes of <code>REPORTDATA</code> to <code>EREPORT</code>. The CPU puts A’s identity and attributes in the report and computes a MAC for B.',
+          '验证方 enclave B 提供自己的 <code>TARGETINFO</code>。Enclave A 将它和 64 字节的 <code>REPORTDATA</code> 传给 <code>EREPORT</code>。CPU 将 A 的身份与属性写入报告，并生成供 B 校验的 MAC。'),
+        t('B uses <code>EGETKEY</code> with the REPORT key selector and the report’s <code>KEYID</code> to derive the verification key. It checks the MAC and evaluates <code>MRENCLAVE</code>, <code>MRSIGNER</code>, attributes and security version according to policy.',
+          'B 用 <code>EGETKEY</code>，按 REPORT 密钥类型及报告中的 <code>KEYID</code> 派生验证密钥。它先验证 MAC，再按策略评估 <code>MRENCLAVE</code>、<code>MRSIGNER</code>、属性和安全版本。'),
+        t('For a fresh secure session, bind a nonce and ephemeral key or the key exchange transcript to <code>REPORTDATA</code>. The Intel SDK LocalAttestation sample combines local reports with Diffie–Hellman to establish a session key.',
+          '建立新安全会话时，可将 nonce 和临时公钥或密钥交换记录绑定到 <code>REPORTDATA</code>。Intel SDK 的 LocalAttestation 示例将本地报告与 Diffie–Hellman 结合来建立会话密钥。'),
+    ]) + '</ol><p class="source-note"><a class="inline-link" href="https://github.com/intel/confidential-computing.sgx.sdk/tree/main/SampleCode/LocalAttestation">Intel SDK LocalAttestation ↗</a></p>'
+    remote = sgx_figure(lang, 'dcap', t('Intel DCAP deployment and verification architecture', 'Intel DCAP 部署与验证架构'),
+        t('The app enclave and QE are on the attesting platform. The relying party uses a verifier and collateral from the datacenter cache.',
+          '应用 enclave 和 QE 在证明平台上。依赖方使用验证组件以及来自数据中心缓存的验证材料。'),
+        t('The runtime path is on the right. The left side provisions platform certificates and collateral ahead of verification.',
+          '右侧是运行时的 Quote 与验证路径。左侧是事先取得平台证书和验证材料的流程。'))
+    remote_text = table(t(('Stage', 'Actor and checks'), ('阶段', '参与者与检查')), [
+        (t('Challenge and local report', '挑战与本地报告'), t('The remote verifier issues a fresh challenge. The application obtains QE target info (for example, <code>sgx_qe_get_target_info</code>) and asks its enclave to create an <code>EREPORT</code> for the QE. Bind the challenge and any session key material to <code>REPORTDATA</code> according to the protocol.',
+             '远程验证者发出新鲜挑战值。应用获取 QE 的目标信息（例如 <code>sgx_qe_get_target_info</code>），再让 enclave 用 <code>EREPORT</code> 为 QE 生成报告。按协议在 <code>REPORTDATA</code> 中绑定挑战值和所需的会话公钥等数据。')),
+        (t('Generate Quote', '生成 Quote'), t('The QE verifies the local report and signs a Quote with its attestation key. The Quote carries the application report body and certification data that lets a verifier link the attestation key to a PCK certificate.',
+             'QE 验证本地报告，再用证明密钥签署 Quote。Quote 携带应用报告体和认证数据，使验证者能把 QE 的证明密钥追溯到 PCK 证书。')),
+        (t('Verify and apply policy', '验证与策略判断'), t('DCAP QVL verifies the signatures and collateral, including the PCK chain, CRLs, TCB Info and QE Identity. The relying party evaluates the verification result and collateral expiration, checks challenge and key binding, and applies its policy to the enclave identity, SVN and DEBUG attribute before provisioning application secrets.',
+             'DCAP QVL 检查签名及验证材料，包括 PCK 证书链、CRL、TCB Info 和 QE Identity。依赖方结合验证结果及材料有效期，核对挑战值与公钥绑定，再按策略检查 enclave 身份、SVN 和 DEBUG 属性，决定是否下发应用秘密。')),
+    ])
+    implementation = '<p>' + t(
+        'In the DCAP samples, follow <code>sgx_qe_get_target_info</code>, the application enclave’s report creation, <code>sgx_qe_get_quote_size</code> and <code>sgx_qe_get_quote</code>. On the verifier, <code>sgx_qv_verify_quote</code> returns a quote verification result and a collateral expiration status. The sample applications demonstrate the library calls. The challenge, channel binding and acceptance policy belong to the application protocol.',
+        '阅读 DCAP 示例时，依次跟踪 <code>sgx_qe_get_target_info</code>、应用 enclave 创建报告、<code>sgx_qe_get_quote_size</code> 和 <code>sgx_qe_get_quote</code>。验证侧的 <code>sgx_qv_verify_quote</code> 会返回 Quote 验证结果及验证材料的到期状态。示例演示库调用，挑战值、通道绑定和验收策略由应用协议实现。'
+    ) + '</p>'
+    sources = '<p class="source-note"><a class="inline-link" href="https://github.com/intel/confidential-computing.tee.dcap/tree/main/SampleCode/QuoteGenerationSample">' + t('Intel DCAP quote generation sample', 'Intel DCAP Quote 生成示例') + '</a> · <a class="inline-link" href="https://github.com/intel/confidential-computing.tee.dcap/tree/main/SampleCode/QuoteVerificationSample">' + t('Quote verification sample', 'Quote 验证示例') + '</a> · <a class="inline-link" href="' + SGX_DCAP + '">' + t('Intel PCCS design guide', 'Intel PCCS 设计指南') + '</a></p>'
+    return (
+        article(t('LOCAL ATTESTATION', '本地证明'), t('Authenticate an enclave on the same platform', '同一平台上的 enclave 身份验证'),
+                t('A local REPORT uses a symmetric MAC tied to a target enclave. The target verifies it and decides whether to trust the source.',
+                  '本地 REPORT 用与目标 enclave 绑定的对称 MAC 认证。目标验证报告，并决定是否信任源 enclave。'),
+                local + local_text, 'local-attestation')
+        + article(t('REMOTE ATTESTATION', '远程证明'), t('From local REPORT to a remotely verifiable Quote', '从本地 REPORT 到远端可验证的 Quote'),
+                  t('In the DCAP ECDSA path, an architectural Quoting Enclave turns local evidence into a signed Quote for an external verifier.',
+                    '在 DCAP ECDSA 路径中，专用的 Quoting Enclave 将本地证据转换为签名 Quote，供外部验证者检查。'),
+                  remote + remote_text + implementation + sources, 'remote-attestation')
+    )
+
+
+def sgx_provisioning(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    roles = table(t(('Component', 'Role'), ('组件', '职责')), [
+        ('QE · Quoting Enclave', t('Authenticates the application’s local REPORT and signs the Quote with the QE attestation key.',
+                                    '认证应用的本地 REPORT，并用 QE 自己的证明密钥签署 Quote。')),
+        ('PCE · Provisioning Certification Enclave', t('Derives the platform and TCB-specific PCK and uses it to sign the QE report that binds the attestation public key.',
+                                                         '派生与平台及 TCB 对应的 PCK，用它为绑定证明公钥的 QE 报告签名。')),
+        ('QvE · Quote Verification Enclave', t('Optionally runs quote verification inside an enclave and produces a local report for a trusted consumer. The host-side QVL can also verify without a QvE.',
+                                               '可选地在 enclave 内验证 Quote，并为可信调用方生成本地报告。宿主侧 QVL 也可以独立验证。')),
+        ('AESM · Architectural Enclave Service Manager', t('Host daemon that coordinates architectural enclave services in out-of-process configurations. In-process DCAP quoting loads the quoting components through the library.',
+                                                           '宿主守护进程，在进程外配置中协调架构 enclave 服务。进程内 DCAP 则由库加载 Quote 生成组件。')),
+        (t('Historical AEs', '早期 AE'), t('The Launch Enclave (LE) supplied launch tokens on legacy configurations. PvE and PSE served EPID provisioning and legacy platform services. The modern DCAP path uses the ECDSA QE and PCE.',
+                                         'Launch Enclave（LE）为早期配置提供启动令牌。PvE 与 PSE 分别服务于 EPID 预配和早期平台服务。当前 DCAP 流程使用 ECDSA QE 与 PCE。')),
+    ])
+    chain = diagram_flow([
+        node(t('Intel certificate chain', 'Intel 证书链'), t('Certifies PCK public key', '认证 PCK 公钥')),
+        arrow(), node('PCK / PCE', t('Certifies the QE report', '签署 QE 报告')),
+        arrow(), node(t('QE attestation key', 'QE 证明密钥'), t('Signs the Quote', '签署 Quote')),
+        arrow(), node(t('App enclave identity', '应用 enclave 身份'), t('Carried in the signed report body', '包含在已签名报告体中'), 'protected'),
+    ])
+    trust_chain = frame(lang, 'sgx-pck-chain', t('Follow the signing chain from Intel to the application', '从 Intel 证书追踪到应用 enclave 身份'),
+        chain, t('The QE report binds the attestation public key. The application report in the Quote binds the application’s own evidence.',
+                 'QE 报告绑定证明公钥，Quote 内的应用报告则绑定应用自身的证据。'),
+        'https://cdrdv2-public.intel.com/671314/intel-sgx-support-for-third-party-attestation.pdf', 'Intel SGX Third-Party Attestation')
+    provisioning = '<p>' + t(
+        'During platform provisioning, a platform owner retrieves Intel-signed PCK certificates and collateral from the Provisioning Certification Service (PCS), typically through a datacenter PCCS cache. The Quote Provider Library (QPL) is the software interface for fetching that material. The PCK certificate contains the public key and certification metadata. The PCK private key stays in the hardware-backed PCE path.',
+        '平台预配时，平台运营者从 Provisioning Certification Service（PCS）取得 Intel 签发的 PCK 证书与验证材料，通常经数据中心 PCCS 缓存。Quote Provider Library（QPL）提供获取这些材料的软件接口。PCK 证书包含公钥及认证元数据，PCK 私钥留在硬件支持的 PCE 路径中。'
+    ) + '</p><p>' + t(
+        'On a single-package platform, the certificate request uses platform identification such as encrypted PPID, together with CPU SVN, PCE SVN and PCE ID. On a multi-package platform, Intel first needs a registration record for the assembled system. The PPID identifies the platform. The PCK signs the QE report, and the separate per-package Platform Registration Key (PRK) signs registration evidence.',
+        '在单路平台上，证书请求使用加密的 PPID 等平台标识，以及 CPU SVN、PCE SVN 和 PCE ID。多路平台需先登记组装后的整机。PPID 标识平台，PCK 用于签署 QE 报告，各 CPU 封装另有用于签署注册证据的平台注册密钥（PRK）。'
+    ) + '</p><p>' + t(
+        'Application secret provisioning happens after attestation. For example, a client releases an application key over a channel whose enclave public key is bound to the verified evidence.',
+        '应用秘密预配发生在证明通过后。例如，客户端可以通过安全通道下发应用密钥，并用已验证证据中的公钥绑定确认通道确实通向目标 enclave。'
+    ) + '</p><p class="source-note"><a class="inline-link" href="https://cc-enabling.trustedservices.intel.com/intel-sgx-sw-installation-guide-linux/03/software-packages/">' + t('Intel SGX Linux package and AE map', 'Intel SGX Linux 软件包与 AE 对照') + '</a> · <a class="inline-link" href="' + SGX_MP + '01/introduction/">' + t('Intel provisioning terminology', 'Intel 预配术语') + '</a></p>'
+    overview = sgx_figure(lang, 'multi-package', t('Intel multi-package platform registration architecture', 'Intel 多路平台注册架构'),
+        t('CPU packages, BIOS and host software cooperate with the registration and provisioning infrastructure.',
+          '多个 CPU 封装、BIOS 和宿主软件与注册及预配服务协作。'),
+        t('The registration authority checks the participating packages and their configuration so the platform can be certified.',
+          '注册机构检查参与的 CPU 封装及其配置，为整机签发证明所需的证书建立依据。'))
+    lifecycle = sgx_figure(lang, 'platform-key-lifecycle', t('Intel platform key lifecycle', 'Intel 平台密钥生命周期'),
+        t('The official lifecycle diagram shows the initial platform, normal boot, recovery and changes in package membership.',
+          '官方状态图展示平台初始建立、正常启动、恢复和 CPU 封装成员变更。'),
+        t('Track when a platform manifest or a package membership request is needed. Normal boot with consistent key blobs can reuse the existing platform keys.',
+          '重点看何时需要平台清单或封装成员请求。正常启动时若各封装的 key blob 一致，可以复用既有平台密钥。'))
+    steps = '<ol>' + ''.join(f'<li>{step}</li>' for step in [
+        t('<b>Establish the platform.</b> Microcode checks the participating CPU packages and generates shared platform keys. Each package stores an encrypted, authenticated key blob bound to its own hardware. The platform manifest carries package information, PRK signatures and platform keys encrypted for the registration service.',
+          '<b>建立平台。</b>微码检查参与的 CPU 封装并生成共享平台密钥。每个封装都有绑定自身硬件的加密、认证 key blob。平台清单包含封装信息、PRK 签名和用注册服务公钥加密的平台密钥。'),
+        t('<b>Register directly or through an operator.</b> BIOS exposes the pending platform manifest through the <code>SgxRegistrationServerRequest</code> UEFI variable. The Multi-Package Registration Agent can relay the request to Intel Registration Service. An operator can also collect the manifest and use the indirect certificate provisioning flow.',
+          '<b>直接注册或由运营者转交。</b>BIOS 通过 <code>SgxRegistrationServerRequest</code> UEFI 变量提供待处理的平台清单。Multi-Package Registration Agent 可将请求转发给 Intel 注册服务。运营者也可收集清单并使用间接证书预配流程。'),
+        t('<b>Obtain certification and attest.</b> The registration service checks package signatures, revocation and topology before recording the platform. Intel PCS can then provide PCK certificates for it. Individual application enclaves still generate and verify Quotes through the normal DCAP path.',
+          '<b>取得证书并执行证明。</b>注册服务检查各封装签名、撤销状态和拓扑，再登记平台。随后 Intel PCS 可提供该平台的 PCK 证书。各应用 enclave 继续使用常规 DCAP 路径生成与验证 Quote。'),
+        t('<b>Handle platform changes.</b> A normal boot can reuse valid key blobs. Adding a supported package can require a platform membership certificate. TCB recovery can trigger a new manifest and refresh the certificates and verification collateral.',
+          '<b>处理平台变化。</b>正常启动可复用有效 key blob。加入受支持的 CPU 封装时可能需要平台成员证书。TCB 恢复可能触发新的平台清单，并更新证书和验证材料。'),
+    ]) + '</ol>'
+    return (
+        article(t('ARCHITECTURAL ENCLAVES AND PROVISIONING', '架构 Enclave 与预配'),
+                t('How QE, PCE and the PCK certificate fit together', 'QE、PCE 和 PCK 证书如何配合'),
+                t('Architectural Enclaves (AEs) are special-purpose enclaves used by the SGX platform software. The DCAP provisioning chain ties a QE’s attestation key to a genuine platform and TCB.',
+                  'Architectural Enclave（AE）是 SGX 平台软件使用的专用 enclave。DCAP 预配链将 QE 的证明密钥绑定到真实平台和对应的 TCB。'),
+                roles + trust_chain + provisioning, 'provisioning')
+        + article(t('MULTI-PACKAGE PROVISIONING', '多路平台预配'),
+                  t('Register a multi-socket server as one platform', '将多路服务器注册为一个平台'),
+                  t('A multi-package system establishes shared platform keys across physical CPU packages. Registration certifies that composition before the platform can obtain PCK certificates.',
+                    '多路系统在多个物理 CPU 封装之间建立共享平台密钥。完成整机注册后，平台才能取得相应的 PCK 证书。'),
+                  overview + steps + lifecycle + '<p class="source-note"><a class="inline-link" href="' + SGX_MP + '03/mp-reg-platform-sw-tools/">' + t('Intel registration agent, UEFI and PCK retrieval tools', 'Intel 注册代理、UEFI 与 PCK 获取工具') + '</a></p>', 'multi-package')
+    )
+
+
+def sgx_applications(lang):
+    t = lambda en, zh: tr(lang, en, zh)
+    products = table(t(('Example', 'What runs in the enclave', 'Deployment context'), ('实例', 'Enclave 内做什么', '部署背景')), [
+        ('Azure SQL Database · Always Encrypted',
+         t('The enclave processes column keys and performs supported operations on sensitive values. A client driver uses Azure Attestation before enabling SGX enclave computations.',
+           'Enclave 处理列加密密钥，并对敏感值执行受支持的查询操作。客户端驱动使用 Azure Attestation 后才启用 SGX enclave 计算。'),
+         t('Microsoft lists October 31, 2027 as end of support for its SGX enclave configuration.', '微软公布该 SGX enclave 配置将于 2027 年 10 月 31 日结束支持。')
+         + ' <a href="https://learn.microsoft.com/en-us/sql/relational-databases/security/encryption/always-encrypted-enclaves?view=sql-server-ver17">Microsoft Learn ↗</a>'),
+        ('Fortanix Data Security Manager',
+         t('On SGX deployments, the service uses keys and performs cryptographic operations within the enclave. Its attestation tooling checks the running DSM identity and platform.',
+           '在 SGX 部署中，服务在 enclave 内使用密钥并执行密码操作。其证明工具核对运行中的 DSM 身份和平台。'),
+         t('See the vendor’s DCAP workflow for SGX deployments.', '厂商文档给出了 SGX 部署的 DCAP 验证流程。')
+         + ' <a href="https://support.fortanix.com/docs/fortanix-data-security-manager-dcap-offline-attestation">Fortanix ↗</a>'),
+        ('Signal · Private Contact Discovery',
+         t('The documented design matches contacts inside a server-side enclave. Path ORAM obscures access patterns to the lookup data.',
+           '公开设计在服务端 enclave 内匹配通讯录联系人，并用 Path ORAM 隐藏查找数据时的访问模式。'),
+         t('Signal engineering write-up, August 2022.', 'Signal 工程团队于 2022 年 8 月公开的设计。')
+         + ' <a href="https://signal.org/blog/building-faster-oram/">Signal Engineering ↗</a>'),
+    ])
+    fs = sgx_figure(lang, 'protected-fs', t('Intel SDK example · Protected File System', 'Intel SDK 示例 · 受保护文件系统'),
+        t('Trusted file processing runs in the enclave and the untrusted part handles I/O to the storage device.',
+          '可信文件处理在 enclave 内执行，外部不可信部分负责存储设备 I/O。'),
+        t('Follow the trusted and untrusted libraries. The enclave handles the protected file contents, while the OS performs physical I/O via an OCALL.',
+          '沿可信与非可信库的连线阅读。Enclave 处理受保护的文件内容，OS 通过 OCALL 执行实际 I/O。'))
+    return article(t('APPLICATIONS', '产品实例'), t('How real applications place their trust boundary', '实际应用如何划分信任边界'),
+        t('Each example protects a specific operation: a database query, use of a key, or a contact lookup.',
+          '这些实例分别保护具体操作，包括数据库查询、密钥使用和通讯录查找。'), products + fs, 'applications')
+
+
 def sgx_en():
     hero = page_hero('en', 'INTEL SGX', 'An enclave is a new<br><em>CPU access boundary</em>', 'Understand the physical EPC and EPCM checks, how an enclave is measured and initialized, and which instructions cross the boundary.')
     hardware = '<div class="detail-grid">' + ''.join([
@@ -141,24 +394,18 @@ def sgx_en():
         '<div class="stack-row"><b>SECS</b><span>Enclave Control Structure: enclave-wide attributes, range and identity state used during creation.</span></div>',
         '<div class="stack-row"><b>TCS</b><span>Thread Control Structure: an entry point and execution state for one enclave thread.</span></div>'
     ]) + '</div><div class="signal" style="margin-top:20px"><strong>Why the OS page table is not enough</strong>The OS still maps virtual addresses and manages resources. The CPU also checks EPCM ownership and permissions before an enclave page is used. Memory encryption and integrity details vary across SGX processor generations; check the actual platform rather than assuming one uniform property.</div>'
-    instructions = table(('Class / privilege', 'Leaf', 'What to remember'), [
-        ('ENCLS · privileged', '<code>ECREATE</code>', 'Create SECS and begin a new enclave.'),
-        ('ENCLS · privileged', '<code>EADD</code> / <code>EEXTEND</code>', 'Add EPC pages and extend the measurement over selected contents.'),
-        ('ENCLS · privileged', '<code>EINIT</code>', 'Validate initialization requirements and finalize the enclave before entry.'),
-        ('ENCLS · privileged', '<code>EREMOVE</code>', 'Remove an EPC page during teardown or reclamation.'),
-        ('ENCLU · user', '<code>EENTER</code> / <code>EEXIT</code>', 'Enter and leave enclave execution through its defined interface.'),
-        ('ENCLU · user', '<code>ERESUME</code>', 'Resume after an asynchronous enclave exit (AEX).'),
-        ('ENCLU · enclave', '<code>EREPORT</code> / <code>EGETKEY</code>', 'Create a local report or derive an enclave-specific key.'),
-        ('SGX2 · optional', '<code>EACCEPT</code>', 'Accept dynamically added or modified pages where SGX2 is supported.')
-    ]) + '<p class="source-note">ENCLS/ENCLU names refer to instruction groups; the named operations are leaves. See Intel’s <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/articles/technical/overview-of-an-intel-software-guard-extensions-enclave-life-cycle.html">enclave lifecycle overview</a> and the <a class="inline-link" href="https://www.intel.com/content/dam/develop/external/us/en/documents/329298-002-629101.pdf">programming reference</a> for operands and exceptions.</p>'
-    flow = '<div class="stack">' + ''.join([
-        '<div class="stack-row"><b>BUILD</b><span>OS/runtime: ECREATE → EADD pages → EEXTEND measured content → EINIT.</span></div>',
-        '<div class="stack-row"><b>RUN</b><span>Host thread: EENTER → enclave code → EEXIT, with trusted/untrusted parameter handling at the interface.</span></div>',
-        '<div class="stack-row"><b>INTERRUPT</b><span>An interrupt or exception can trigger AEX (an event, not an instruction). The host handles it; ERESUME re-enters when appropriate.</span></div>',
-        '<div class="stack-row"><b>EXTEND</b><span>SGX2 may add/change pages dynamically, with enclave acceptance before use.</span></div>'
-    ]) + '</div>'
     boundary = '<div class="split"><div class="panel"><h3>Inside the enclave</h3><p>Keep secrets and only the code that needs them. Validate every value returned by host calls. Minimize runtime and serialization logic that must be trusted.</p></div><div class="panel"><h3>Outside the enclave</h3><p>The OS and host process can schedule, interrupt and feed input. Page-fault patterns, caches and timing may reveal information unless the application accounts for them.</p></div></div>'
-    return hero + article('01 / PLATFORM SUPPORT', 'First verify hardware and firmware', '“This CPU family supports SGX” does not prove the particular machine exposes a usable enclave facility.', hardware, 'hardware') + article('02 / MEMORY MODEL', 'Four structures to keep in view', 'Follow one page from ordinary memory into EPC and through CPU metadata checks.', diagram('sgx_memory', 'en') + memory, 'memory') + article('03 / INSTRUCTION MAP', 'Read the lifecycle as ENCLS and ENCLU', 'Do not memorize opcodes first. Group the leaves by who executes them and which state transition they make.', instructions, 'instructions') + article('04 / EXECUTION TRACE', 'One enclave from creation to interruption', 'AEX and resumption are especially important when reasoning about interrupts and untrusted scheduling.', diagram('sgx_execution', 'en') + flow, 'flow') + article('05 / SECURITY BOUNDARY', 'What isolation still leaves to software', 'The enclave protects direct access to its pages; its host interface and side-channel behavior are separate design work.', boundary)
+    return (
+        hero + sgx_contents('en') + sgx_architecture('en')
+        + article('01 / PLATFORM SUPPORT', 'First verify hardware and firmware', '“This CPU family supports SGX” does not prove the particular machine exposes a usable enclave facility.', hardware, 'hardware')
+        + article('02 / MEMORY MODEL', 'Four structures to keep in view', 'Follow one page from ordinary memory into EPC and through CPU metadata checks.', diagram('sgx_memory', 'en') + memory + sgx_layout('en'), 'memory')
+        + article('03 / INSTRUCTION MAP', 'Read the lifecycle as ENCLS and ENCLU', 'Do not memorize opcodes first. Group the leaves by who executes them and which state transition they make.', sgx_instructions('en'), 'instructions')
+        + article('04 / EXECUTION TRACE', 'One enclave from creation to interruption', 'AEX and resumption are especially important when reasoning about interrupts and untrusted scheduling.', diagram('sgx_execution', 'en') + sgx_call_paths('en'), 'flow')
+        + article('05 / SECURITY BOUNDARY', 'What isolation still leaves to software', 'The enclave protects direct access to its pages; its host interface and side-channel behavior are separate design work.', boundary)
+        + sgx_attestation('en')
+        + sgx_provisioning('en')
+        + sgx_applications('en')
+    )
 
 
 def sgx_zh():
@@ -175,24 +422,18 @@ def sgx_zh():
         '<div class="stack-row"><b>SECS</b><span>Enclave Control Structure：创建时使用的全局属性、范围和身份状态。</span></div>',
         '<div class="stack-row"><b>TCS</b><span>Thread Control Structure：一个 enclave 线程的入口与执行状态。</span></div>'
     ]) + '</div><div class="signal" style="margin-top:20px"><strong>为什么 OS 页表还不够</strong>OS 仍映射虚拟地址并管理资源；CPU 使用 EPCM 再检查 enclave 页面所有权和权限。内存加密与完整性的细节因 SGX 处理器代际而异，不能假定所有平台具有完全相同的属性。</div>'
-    instructions = table(('指令组 / 权限', 'Leaf', '应记住的作用'), [
-        ('ENCLS · 特权态', '<code>ECREATE</code>', '创建 SECS，开始新 enclave。'),
-        ('ENCLS · 特权态', '<code>EADD</code> / <code>EEXTEND</code>', '添加 EPC 页面，对选定内容扩展测量值。'),
-        ('ENCLS · 特权态', '<code>EINIT</code>', '验证初始化条件，并在进入前完成 enclave 初始化。'),
-        ('ENCLS · 特权态', '<code>EREMOVE</code>', '在拆除或回收时移除 EPC 页面。'),
-        ('ENCLU · 用户态', '<code>EENTER</code> / <code>EEXIT</code>', '通过定义好的接口进入和离开 enclave 执行。'),
-        ('ENCLU · 用户态', '<code>ERESUME</code>', '在异步 enclave 退出（AEX）后恢复。'),
-        ('ENCLU · enclave', '<code>EREPORT</code> / <code>EGETKEY</code>', '生成本地报告或派生 enclave 专属密钥。'),
-        ('SGX2 · 可选', '<code>EACCEPT</code>', '在支持 SGX2 时接受动态加入或更改的页面。')
-    ]) + '<p class="source-note">ENCLS/ENCLU 是指令组，表中的名称是对应 leaf。操作数与异常请看 Intel 的 <a class="inline-link" href="https://www.intel.com/content/www/us/en/developer/articles/technical/overview-of-an-intel-software-guard-extensions-enclave-life-cycle.html">enclave 生命周期导读</a>和<a class="inline-link" href="https://www.intel.com/content/dam/develop/external/us/en/documents/329298-002-629101.pdf">编程参考</a>。</p>'
-    flow = '<div class="stack">' + ''.join([
-        '<div class="stack-row"><b>构建</b><span>OS/运行时：ECREATE → EADD 页面 → EEXTEND 测量内容 → EINIT。</span></div>',
-        '<div class="stack-row"><b>运行</b><span>宿主线程：EENTER → enclave 代码 → EEXIT；边界上的可信/不可信参数要审查。</span></div>',
-        '<div class="stack-row"><b>中断</b><span>中断或异常可能触发 AEX（事件，不是一条指令）。宿主处理后，适当情况下用 ERESUME 再进入。</span></div>',
-        '<div class="stack-row"><b>扩展</b><span>SGX2 可动态增加或更改页面；enclave 接受后才能使用。</span></div>'
-    ]) + '</div>'
     boundary = '<div class="split"><div class="panel"><h3>Enclave 内部</h3><p>只保留秘密和需要处理秘密的代码。校验宿主调用返回的每个值。尽量缩小必须信任的运行时与序列化逻辑。</p></div><div class="panel"><h3>Enclave 外部</h3><p>OS 和宿主进程可以调度、打断并提供输入。若应用未处理页面故障模式、缓存和时序，它们仍可能泄露信息。</p></div></div>'
-    return hero + article('01 / 平台支持', '先确认硬件与固件', '“这个 CPU 家族支持 SGX”并不证明眼前的机器提供可用的 enclave 功能。', hardware, 'hardware') + article('02 / 内存模型', '记住四个关键结构', '跟随一个页面从普通内存进入 EPC，并经过 CPU 元数据检查。', diagram('sgx_memory', 'zh') + memory, 'memory') + article('03 / 指令地图', '按 ENCLS 与 ENCLU 读生命周期', '先按执行者和状态变化分组，再去记操作码。', instructions, 'instructions') + article('04 / 执行路径', '从创建到中断的一次运行', 'AEX 与恢复是理解中断和不可信调度的关键。', diagram('sgx_execution', 'zh') + flow, 'flow') + article('05 / 安全边界', '隔离仍留给软件的问题', 'Enclave 阻止页面被直接读取；宿主接口和侧信道行为仍需单独设计。', boundary)
+    return (
+        hero + sgx_contents('zh') + sgx_architecture('zh')
+        + article('01 / 平台支持', '先确认硬件与固件', '“这个 CPU 家族支持 SGX”并不证明眼前的机器提供可用的 enclave 功能。', hardware, 'hardware')
+        + article('02 / 内存模型', '记住四个关键结构', '跟随一个页面从普通内存进入 EPC，并经过 CPU 元数据检查。', diagram('sgx_memory', 'zh') + memory + sgx_layout('zh'), 'memory')
+        + article('03 / 指令地图', '按 ENCLS 与 ENCLU 读生命周期', '先按执行者和状态变化分组，再去记操作码。', sgx_instructions('zh'), 'instructions')
+        + article('04 / 执行路径', '从创建到中断的一次运行', 'AEX 与恢复是理解中断和不可信调度的关键。', diagram('sgx_execution', 'zh') + sgx_call_paths('zh'), 'flow')
+        + article('05 / 安全边界', '隔离仍留给软件的问题', 'Enclave 阻止页面被直接读取；宿主接口和侧信道行为仍需单独设计。', boundary)
+        + sgx_attestation('zh')
+        + sgx_provisioning('zh')
+        + sgx_applications('zh')
+    )
 
 
 def tdx_contents(lang):
