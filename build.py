@@ -1,4 +1,5 @@
 """Build the static bilingual TEE atlas (stdlib only)."""
+from hashlib import sha256
 from pathlib import Path
 
 from coco import coco_page
@@ -48,9 +49,13 @@ def shell(lang, page, body):
     en_current = '' if zh else 'aria-current="page" '
     zh_current = 'aria-current="page" ' if zh else ''
     languages = f'<nav class="langbar" aria-label="{lang_label}"><a data-atlas-lang="en" {en_current}href="{page}.html">EN</a><a data-atlas-lang="zh" {zh_current}href="{page}.zh.html">中文</a></nav>'
+    diagrams_css = 'diagrams.css'
+    if page == 'coco':
+        revision = sha256((ROOT / diagrams_css).read_bytes()).hexdigest()[:12]
+        diagrams_css += f'?v={revision}'
     foot = ('Intel SGX、Intel TDX 与 AMD SEV 的硬件和软件机制。功能支持及指令接口以具体处理器、模块和系统版本为准。' if zh else 'An architecture guide to Intel SGX, Intel TDX and AMD SEV. Check processor, module and OS versions for actual feature and ABI support.')
     return f'''<!doctype html>
-<html lang="{'zh-CN' if zh else 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101b2a"><meta name="description" content="{DESCRIPTIONS[lang]}"><title>{TITLES[lang][idx]} · ShundaZhang</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="diagrams.css"><script src="language.js"></script></head>
+<html lang="{'zh-CN' if zh else 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101b2a"><meta name="description" content="{DESCRIPTIONS[lang]}"><title>{TITLES[lang][idx]} · ShundaZhang</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="{diagrams_css}"><script src="language.js"></script></head>
 <body>{languages}<a class="skip" href="#main">{'跳至正文' if zh else 'Skip to content'}</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="index{suffix}"><span class="brand-mark">T//</span><span class="brand-name">TEE ATLAS</span></a><nav class="nav" aria-label="{'主导航' if zh else 'Main navigation'}">{nav}</nav></div></header>
 <main id="main">{body}</main><footer class="footer"><div class="wrap footer-inner"><div><strong>TEE ATLAS</strong><p>{foot}</p></div><div><a href="https://shundazhang.github.io/">{'个人主页' if zh else 'Home'}</a><a href="https://github.com/ShundaZhang/tee-tdx-sgx">GitHub ↗</a></div></div></footer></body></html>'''
 

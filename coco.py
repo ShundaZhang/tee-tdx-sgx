@@ -34,14 +34,14 @@ def coco_page(lang, *, page_hero, article, table, link):
         width, height = dimensions
         asset = f'assets/coco/{name}.svg'
         label = escape(t('Open the original at full size', '打开原始大图') + ' · ' + t(*title), quote=True)
-        scroll_label = escape(t('Scrollable figure', '可滚动的图') + ' · ' + t(*title), quote=True)
         display_class = ' coco-original-narrow' if narrow else ''
         body = (
-            f'<div class="coco-original-scroll{display_class}" tabindex="0" role="region" aria-label="{scroll_label}">'
-            f'<a href="{asset}" target="_blank" rel="noopener" aria-label="{label}">'
-            f'<img src="{asset}" width="{width}" height="{height}" loading="lazy" decoding="async" alt="{escape(t(*title), quote=True)}">'
-            '</a></div>'
-            f'<p class="coco-figure-hint">{t("Scroll on small screens or open the full-size figure.", "小屏幕可左右滑动，也可点图查看原始大图。")}</p>'
+            f'<a class="coco-original{display_class}" href="{asset}" target="_blank" rel="noopener" aria-label="{label}">'
+            # Fit the preview even if the stylesheet is still cached or unavailable.
+            f'<img src="{asset}" width="{width}" height="{height}" style="max-width:100%;height:auto" '
+            f'loading="lazy" decoding="async" alt="{escape(t(*title), quote=True)}">'
+            '</a>'
+            f'<p class="coco-figure-hint">{t("Select the figure to open it at full size.", "点击图片查看原始大图。")}</p>'
         )
         return figure(f'coco-official-{name}', title, body, (
             caption[0] + ' © The Linux Foundation.',
