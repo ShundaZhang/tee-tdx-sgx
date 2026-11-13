@@ -17,6 +17,8 @@ PEERS = DOCS + 'cloud-providers/'
 TRUSTEE = 'https://github.com/confidential-containers/trustee'
 GUEST = 'https://github.com/confidential-containers/guest-components'
 PROTOCOL = TRUSTEE + '/blob/main/kbs/docs/kbs_attestation_protocol.md'
+TRUSTEE_ARCH = DOCS + 'attestation/architecture/'
+SECURING_WORKLOAD = DOCS + 'getting-started/securing-workloads/'
 RUNTIME_CLASS = 'https://kubernetes.io/docs/concepts/containers/runtime-class/'
 KATA = 'https://github.com/kata-containers/kata-containers'
 
@@ -27,6 +29,24 @@ def coco_page(lang, *, page_hero, article, table, link):
 
     def figure(ident, title, body, caption, url, source):
         return frame(lang, ident, t(*title), body, t(*caption), url, source)
+
+    def official_figure(name, dimensions, title, caption, url, source, *, narrow=False):
+        width, height = dimensions
+        asset = f'assets/coco/{name}.svg'
+        label = escape(t('Open the original at full size', '打开原始大图') + ' · ' + t(*title), quote=True)
+        scroll_label = escape(t('Scrollable figure', '可滚动的图') + ' · ' + t(*title), quote=True)
+        display_class = ' coco-original-narrow' if narrow else ''
+        body = (
+            f'<div class="coco-original-scroll{display_class}" tabindex="0" role="region" aria-label="{scroll_label}">'
+            f'<a href="{asset}" target="_blank" rel="noopener" aria-label="{label}">'
+            f'<img src="{asset}" width="{width}" height="{height}" loading="lazy" decoding="async" alt="{escape(t(*title), quote=True)}">'
+            '</a></div>'
+            f'<p class="coco-figure-hint">{t("Scroll on small screens or open the full-size figure.", "小屏幕可左右滑动，也可点图查看原始大图。")}</p>'
+        )
+        return figure(f'coco-official-{name}', title, body, (
+            caption[0] + ' © The Linux Foundation.',
+            caption[1] + ' © The Linux Foundation.',
+        ), url, t(*source))
 
     def steps(*items):
         parts = []
@@ -81,6 +101,15 @@ def coco_page(lang, *, page_hero, article, table, link):
          'PodVM 是硬件隔离边界。同一 Pod 的 init container、应用容器和 sidecar 共享 Guest 内核。'),
         TRUST, 'CoCo Trust Model',
     )
+    upstream_architecture = official_figure(
+        'architecture', (769, 1488),
+        ('Official CoCo architecture', 'CoCo 官方架构总图'),
+        ('Start at kubelet and containerd. Follow Kata shim to the hypervisor and the in-guest Kata Agent. In parallel, trace nydus-snapshotter to image-rs and the registry. The Trustee branch shows how AA and CDH reach KBS. ASR is the guest REST gateway.',
+         '从 kubelet 和 containerd 出发，沿 Kata shim 找到 Hypervisor 和 Guest 内的 Kata Agent。再从 nydus-snapshotter 沿另一条路径追踪 image-rs 和镜像仓库。Trustee 分支展示 AA 与 CDH 如何连接 KBS。ASR 是 Guest 内的 REST 网关。'),
+        DESIGN + '#putting-the-pieces-together',
+        ('CoCo Design Overview · Putting the pieces together', 'CoCo 设计总览 · 整体架构'),
+        narrow=True,
+    )
     modes = table(t(('Model', 'Isolation boundary', 'What the workload relies on'), ('模型', '隔离边界', '工作负载依赖什么')), [
         (t('Ordinary OCI container', '普通 OCI 容器'),
          t('Namespaces, cgroups and kernel security controls', 'namespace、cgroup 和内核安全机制'),
@@ -100,7 +129,7 @@ def coco_page(lang, *, page_hero, article, table, link):
         modes + boundary_figure + notes((
             'The workload depends on the CPU and firmware, guest OS, in-guest runtime, application and the trusted verification and release services. The host still controls scheduling and can interrupt the VM. Shared I/O, traffic metadata and application logs need their own controls. Plaintext in a Pod manifest, Kubernetes Secret or host-backed mount is already available to the infrastructure handling it.',
             '工作负载依赖 CPU 与固件、Guest OS、Guest 内运行时、应用以及可信的验证和发放服务。宿主仍能控制调度或中断 VM。共享 I/O、流量元数据和应用日志各自需要保护。写入 Pod YAML、普通 Kubernetes Secret 或宿主挂载的明文，会被处理它们的基础设施看到。',
-        )), 'trust-boundary',
+        )) + upstream_architecture, 'trust-boundary',
     )
 
     launch = figure(
@@ -115,6 +144,14 @@ def coco_page(lang, *, page_hero, article, table, link):
          '图示简化了本地 Kata 路径。宿主 snapshotter 与 Guest 镜像服务协作，使工作负载的镜像层可直接在 Guest 内解包。'),
         DESIGN, 'CoCo Design Overview',
     )
+    upstream_image_pull = official_figure(
+        'image-pull', (1318, 471),
+        ('Official guest image pull sequence', '官方 Guest 镜像拉取时序图'),
+        ('Read the first three messages as image preparation, then follow start container through containerd, Kata shim and Kata Agent. The sequence starts after sandbox creation.',
+         '前 3 条消息是镜像准备。随后沿 containerd、Kata shim 和 Kata Agent 追踪 start container。图从沙箱已创建之后开始。'),
+        DESIGN + '#image-pulling',
+        ('CoCo Design Overview · Image Pulling', 'CoCo 设计总览 · 镜像拉取'),
+    )
     pod = article(
         t('IMPLEMENTATION', '实现'),
         t('How Kubernetes creates a PodVM', 'Kubernetes 如何创建 PodVM'),
@@ -127,7 +164,7 @@ def coco_page(lang, *, page_hero, article, table, link):
              '<strong>启动沙箱。</strong> Kata shim 启动 VMM，Guest 随之引导。shim 通过 vsock 等传输转发生命周期 RPC，Guest 中的 Kata Agent 按策略检查宿主请求。'),
             ('<strong>Prepare the root filesystem.</strong> In the containerd design, a snapshotter such as Nydus routes image preparation to the guest. The Kata Agent invokes the Confidential Data Hub (CDH) image pull API. The guest uses <code>image-rs</code> for OCI image retrieval and unpacking and <code>ocicrypt-rs</code> for encrypted layers.',
              '<strong>准备根文件系统。</strong> 在 containerd 架构中，Nydus 等 snapshotter 将镜像准备工作引导到 Guest。Kata Agent 调用 Confidential Data Hub（CDH）的镜像拉取 API。Guest 用 <code>image-rs</code> 获取并解包 OCI 镜像，用 <code>ocicrypt-rs</code> 处理加密层。'),
-        ) + notes((
+        ) + upstream_image_pull + notes((
             'With Peer Pods, Cloud API Adaptor (CAA) calls a provider API to create a separate PodVM beside the worker and forwards the agent traffic. The worker can itself be a VM. The actual confidentiality properties still depend on the selected instance, guest image and verifiable hardware evidence.',
             '在 Peer Pods 模式中，Cloud API Adaptor（CAA）调用云平台 API，在 Worker 旁创建独立的 PodVM，并转发 Agent 流量。Worker 本身可以是虚拟机。机密保护取决于实例类型、Guest 镜像以及可验证的硬件证据。',
         )), 'pod-launch',
@@ -152,12 +189,28 @@ def coco_page(lang, *, page_hero, article, table, link):
          '完成 Request–Challenge–Attestation–Response（RCAR）后，KBS 返回证明令牌。客户端使用会话或 KBS 接受的令牌请求资源。KBS 检查资源策略，将获准的数据封装为加密的 JWE 响应。'),
         PROTOCOL, 'Trustee KBS Protocol',
     )
+    upstream_trustee = official_figure(
+        'trustee', (1320, 275),
+        ('Official Trustee architecture', 'Trustee 官方组件架构'),
+        ('AA sends evidence and CDH requests a resource at the KBS. Follow the evidence from KBS to AS, and the approved reference values from RVPS to AS.',
+         'AA 向 KBS 提交证据，CDH 向 KBS 请求资源。顺着箭头看证据如何从 KBS 交给 AS，以及 RVPS 如何向 AS 提供参考值。'),
+        TRUSTEE_ARCH + '#overview',
+        ('Trustee Architecture · Overview', 'Trustee 架构文档 · 总览'),
+    )
+    upstream_secret_delivery = official_figure(
+        'secret-delivery', (887, 691),
+        ('Official workload-to-Trustee secret delivery sequence', '官方工作负载取密时序图'),
+        ('Follow the workload request to CDH. AA handles the challenge exchange with KBS. After the attestation token returns, CDH requests the resource and receives the encrypted response.',
+         '从工作负载向 CDH 请求秘密开始。AA 负责与 KBS 进行挑战应答。证明令牌返回后，CDH 再请求资源并接收加密响应。'),
+        DESIGN + '#attestation',
+        ('CoCo Design Overview · Attestation', 'CoCo 设计总览 · 远程证明'),
+    )
     attestation = article(
         t('TRUSTEE', 'TRUSTEE'),
         t('From a hardware report to a resource decision', '从硬件报告到资源授权'),
         t('The Attestation Agent (AA) obtains TEE evidence. Trustee evaluates it on behalf of the workload owner. The CDH consumes the resulting protected resource inside the guest.',
           'Attestation Agent（AA）获取 TEE 证据。Trustee 代表工作负载所有者评估证据，CDH 在 Guest 内使用受保护的资源。'),
-        attestation_flow + table(t(('Service', 'Responsibility'), ('服务', '职责')), [
+        upstream_trustee + table(t(('Service', 'Responsibility'), ('服务', '职责')), [
             ('Key Broker Service (KBS)',
              t('Manages the attestation exchange. Uses the verified claims and requested resource path to make a release decision. Encrypts the resource response for the attested guest key.',
                '管理证明交互，根据已验证的声明与资源路径作出发放决定。用已证明的 Guest 公钥保护返回的资源。')),
@@ -170,7 +223,7 @@ def coco_page(lang, *, page_hero, article, table, link):
         ]) + notes((
             'The evidence binds the KBS challenge to the public key generated in the guest. Freshness prevents reuse of an old report for the new challenge. The key binding lets KBS encrypt the response to the guest that produced the evidence, even when the infrastructure relays the traffic.',
             '证据绑定 KBS 的挑战值和 Guest 内生成的公钥。新鲜度检查阻止旧报告被用于新的挑战。公钥绑定让 KBS 能将响应加密给生成证据的 Guest，即使流量经由基础设施转发。',
-        )), 'attestation',
+        )) + upstream_secret_delivery + attestation_flow, 'attestation',
     )
 
     policy_flow = figure(
@@ -184,6 +237,14 @@ def coco_page(lang, *, page_hero, article, table, link):
         ('Kata Agent enforces the in-guest rules. The remote side verifies the policy identity and applies its own resource rules.',
          'Kata Agent 在 Guest 内执行规则。远端验证策略身份，并执行自己的资源授权规则。'),
         INIT_DATA, 'CoCo Init-Data',
+    )
+    upstream_policies = official_figure(
+        'policies', (2631, 1430),
+        ('Official CoCo policy configuration diagram', 'CoCo 官方策略配置图'),
+        ('Trace Kata Agent policy into initdata.toml and the Pod manifest. The KBS resource policy and AS attestation policy are configured at their respective services. The Rego file names shown are examples.',
+         '沿图追踪 Kata Agent 策略如何进入 initdata.toml 和 Pod 清单。KBS 资源策略与 AS 证明策略分别在对应服务上配置。图中的 Rego 文件名为示例。'),
+        SECURING_WORKLOAD + '#the-three-policy-types',
+        ('Securing Your Workload · The Three Policy Types', 'CoCo 工作负载安全指南 · 三类策略'),
     )
     policy = article(
         t('MEASURED CONFIGURATION', '配置度量'),
@@ -206,7 +267,7 @@ def coco_page(lang, *, page_hero, article, table, link):
         ), (
             'Treat Init-Data as integrity-protected configuration that can pass through the control plane. Deliver sensitive material through the KBS or a sealed secret.',
             'Init-Data 是可经过控制面的完整性受保护配置。敏感材料通过 KBS 或 Sealed Secret 交付。',
-        )), 'policy',
+        )) + upstream_policies, 'policy',
     )
 
     image_flow = figure(
@@ -277,7 +338,7 @@ spec:
         (TRUST, ('CoCo Trust Model', 'CoCo 信任模型'), ('Trusted components and exposed interfaces', '可信组件与跨边界接口')),
         (KATA + '/tree/main/src', ('Kata Containers source', 'Kata Containers 源码'), ('Host runtime, shim and in-guest agent', '宿主运行时、shim 和 Guest Agent')),
         (GUEST, ('Guest Components source', 'Guest Components 源码'), ('CDH, Attestation Agent, image-rs and ocicrypt-rs', 'CDH、Attestation Agent、image-rs 与 ocicrypt-rs')),
-        (DOCS + 'attestation/architecture/', ('Trustee architecture', 'Trustee 架构'), ('KBS, AS and RVPS roles', 'KBS、AS 与 RVPS 分工')),
+        (TRUSTEE_ARCH, ('Trustee architecture', 'Trustee 架构'), ('KBS, AS and RVPS roles', 'KBS、AS 与 RVPS 分工')),
         (PROTOCOL, ('Trustee KBS protocol', 'Trustee KBS 协议'), ('Challenge, evidence fields and resource response', '挑战值、证据字段与资源响应')),
         (INIT_DATA, ('CoCo Init-Data', 'CoCo Init-Data'), ('genpolicy and measured configuration', 'genpolicy 与配置度量')),
         (POLICIES, ('CoCo policy guide', 'CoCo 策略指南'), ('Attestation and resource policy examples', '证明策略与资源授权策略示例')),

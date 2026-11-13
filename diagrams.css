@@ -55,3 +55,35 @@
 @media(max-width:800px){.viz-flow{flex-direction:column;gap:0}.viz-flow>.viz-node{flex:auto}.viz-flow>.viz-arrow{flex:auto;min-height:40px}.viz-flow>.viz-arrow>span{font-size:0}.viz-flow>.viz-arrow>span:after{content:'↓';font-size:24px}.viz-flow>.viz-arrow small{margin:3px 0}.viz-three{grid-template-columns:1fr}.viz-three>.viz-zone{padding:16px}.viz-coverage-bars{grid-template-columns:1fr}}
 @media(max-width:600px){.knowledge-viz{padding:19px 16px;margin:25px 0;border-radius:12px}.viz-heading h3{font-size:18px}.viz-two,.viz-fork{grid-template-columns:1fr;gap:28px}.viz-zone{padding:16px}.viz-node{padding:13px 14px}.viz-coverage-row{grid-template-columns:1fr;gap:2px}.viz-coverage-row>strong{padding:2px 0 5px}.viz-sequence-scroll{margin:0 -4px}.viz-sequence-scroll:focus-visible{outline:2px solid var(--v-accent);outline-offset:2px}}
 @media print{.knowledge-viz{break-inside:avoid}.viz-sequence-scroll{overflow:visible}}
+
+/* Upstream CoCo figures preserve their original labels and render without a CDN. */
+.coco-original-scroll {
+  overflow-x: auto;
+  border: 1px solid #d4dfde;
+  border-radius: 8px;
+  background: #fff;
+}
+.coco-original-scroll:focus-visible {
+  outline: 2px solid var(--v-accent);
+  outline-offset: 2px;
+}
+.coco-original-scroll a {
+  display: block;
+  min-width: 720px;
+  margin-inline: auto;
+  padding: 12px;
+}
+.coco-original-scroll img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.coco-original-narrow a {
+  min-width: 490px;
+  max-width: 794px;
+}
+.knowledge-viz .coco-figure-hint {
+  margin: 10px 0 0;
+  color: var(--v-muted);
+  font-size: 12px;
+}
